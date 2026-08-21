@@ -2,7 +2,7 @@
 
 HotelMate connects hotel guests with reception and hotel operations: pre-arrival check-in, service requests, upsells, facilities, restaurant content, and AI-assisted conversations.
 
-The current delivery includes Milestones 0–2 plus the M3 backend and realtime foundation: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, private online check-in documents, the hotel service catalog, role-scoped request queues, persisted request history, and WebSocket updates. The M3 React flows remain intentionally pending until the approved design handoff is available; no substitute design is treated as final.
+The current delivery includes Milestones 0–3: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, private online check-in documents, the hotel service catalog, role-scoped request queues, persisted request history, WebSocket updates, and the approved handoff-based React guest/staff/admin flows. Paid ordering and AI conversations remain intentionally gated to Milestones 4 and 5.
 
 ## Stack
 

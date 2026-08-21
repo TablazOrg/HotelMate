@@ -28,14 +28,14 @@ Delivered with a versioned migration ledger, OpenAPI contract, guarded deploymen
 
 Delivered with an atomic reservation → pre-arrival → active → checked-out state machine, room availability/occupied/cleaning transitions, reservation overlap protection, tenant- and role-bound reception APIs, private MIME-sniffed document storage, SHA-256 metadata, authenticated downloads, replacement and retention handling, a purge command, PostgreSQL integration coverage, and responsive guest/reception interfaces.
 
-## M3 — Service catalog and request operations (backend/realtime complete; handoff-driven UI pending)
+## M3 — Service catalog and request operations (complete)
 
 - Implement the six quick actions (housekeeping, bottled water, tea/coffee, amenities, late checkout, transfer) plus the full service catalog.
 - Add service request creation, assignment, priority, status transitions, notes, and history.
 - Build the operational queue for reception, housekeeping, and F&B with filters and role-aware actions.
 - Add real-time updates between guest and staff using a WebSocket gateway; persist events for reconnect/history.
 
-Delivered on the backend with six seeded quick actions, tenant-scoped catalog administration, active-stay guest ordering/cancellation, assignment-role validation, priority and status controls, immutable event history, department queues, tenant/stay/department-filtered WebSocket delivery, API tests, and PostgreSQL upgrade verification. Guest catalog/tracking and staff queue screens remain open until the approved design handoff can be implemented and visually verified.
+Delivered with six seeded quick actions, tenant-scoped catalog administration, active-stay guest ordering/cancellation, assignment-role validation, priority and status controls, immutable event history, department queues, tenant/stay/department-filtered WebSocket delivery, API tests, and PostgreSQL upgrade verification. The React delivery now includes the approved handoff-based Persian RTL guest home/catalog/live tracking experience, one-tap requests, mobile fulfillment queues, an actionable realtime operations dashboard, catalog activation/creation controls, and responsive tenant branding. Paid ordering and AI surfaces remain explicitly gated to M4 and M5.
 
 ## M4 — Revenue and hotel content
 
