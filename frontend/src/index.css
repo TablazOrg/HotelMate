@@ -1,0 +1,41 @@
+@import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color: #17211f;
+  background: #eef4f2;
+  font-family: 'Vazirmatn', system-ui, sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; min-width: 320px; }
+
+.page-shell { min-height: 100vh; padding: 28px 18px 52px; }
+.hero-card, .next-steps { max-width: 1080px; margin: 0 auto; }
+.hero-card {
+  display: grid; grid-template-columns: auto 1fr auto; gap: 22px; align-items: center;
+  padding: clamp(24px, 5vw, 60px); color: #f5fffc; background: #12433d;
+  border-radius: 28px; box-shadow: 0 24px 60px rgba(18, 67, 61, .2);
+}
+.brand-mark { display: grid; place-items: center; width: 64px; height: 64px; border-radius: 18px; color: #12433d; background: #c3f2dc; font-weight: 800; letter-spacing: .08em; }
+.eyebrow { margin: 0 0 9px; color: #a9dac4; font-size: .85rem; font-weight: 600; }
+h1, h2, h3, p { margin-top: 0; }
+h1 { margin-bottom: 10px; font-size: clamp(1.7rem, 4vw, 3.2rem); line-height: 1.2; }
+.intro { max-width: 560px; margin-bottom: 0; color: #d2ebe0; line-height: 1.9; }
+.status-pill { display: flex; align-items: center; gap: 8px; padding: 9px 13px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; white-space: nowrap; font-size: .82rem; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: #facc15; }
+.status-pill.online .status-dot { background: #4ade80; }
+.status-pill.offline .status-dot { background: #fb7185; }
+.next-steps { padding: 52px 4px 0; }
+.next-steps h2 { margin-bottom: 20px; font-size: 1.35rem; }
+.module-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.module-grid article { min-height: 160px; padding: 22px; background: #fff; border: 1px solid #d7e6e0; border-radius: 20px; }
+.module-grid span { color: #16826d; font-size: .8rem; font-weight: 700; }
+.module-grid h3 { margin: 14px 0 7px; font-size: 1.1rem; }
+.module-grid p { margin-bottom: 0; color: #5d6c68; font-size: .9rem; line-height: 1.8; }
+@media (max-width: 720px) {
+  .hero-card { grid-template-columns: auto 1fr; }
+  .status-pill { grid-column: 1 / -1; justify-self: start; }
+  .module-grid { grid-template-columns: 1fr; }
+}
