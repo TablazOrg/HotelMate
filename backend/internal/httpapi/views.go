@@ -149,3 +149,91 @@ func toOnlineCheckInView(checkIn models.OnlineCheckIn, includeStay bool) onlineC
 	}
 	return view
 }
+
+type serviceView struct {
+	ID               uuid.UUID              `json:"id"`
+	Code             string                 `json:"code"`
+	Name             string                 `json:"name"`
+	Description      string                 `json:"description"`
+	Category         models.ServiceCategory `json:"category"`
+	Icon             string                 `json:"icon"`
+	FulfillmentRole  models.StaffRole       `json:"fulfillmentRole"`
+	EstimatedMinutes int                    `json:"estimatedMinutes"`
+	PriceCents       int64                  `json:"priceCents"`
+	Currency         string                 `json:"currency"`
+	IsPaid           bool                   `json:"isPaid"`
+	IsQuickAction    bool                   `json:"isQuickAction"`
+	SortOrder        int                    `json:"sortOrder"`
+	IsActive         bool                   `json:"isActive"`
+}
+
+func toServiceView(service models.Service) serviceView {
+	return serviceView{
+		ID: service.ID, Code: service.Code, Name: service.Name, Description: service.Description,
+		Category: service.Category, Icon: service.Icon, FulfillmentRole: service.FulfillmentRole,
+		EstimatedMinutes: service.EstimatedMinutes, PriceCents: service.PriceCents, Currency: service.Currency,
+		IsPaid: service.IsPaid, IsQuickAction: service.IsQuickAction, SortOrder: service.SortOrder, IsActive: service.IsActive,
+	}
+}
+
+type requestEventView struct {
+	ID         uuid.UUID               `json:"id"`
+	EventType  models.RequestEventType `json:"eventType"`
+	FromStatus *models.RequestStatus   `json:"fromStatus,omitempty"`
+	ToStatus   *models.RequestStatus   `json:"toStatus,omitempty"`
+	ActorType  string                  `json:"actorType"`
+	Note       string                  `json:"note"`
+	CreatedAt  time.Time               `json:"createdAt"`
+}
+
+type serviceRequestView struct {
+	ID              uuid.UUID            `json:"id"`
+	Status          models.RequestStatus `json:"status"`
+	Priority        int                  `json:"priority"`
+	Quantity        int                  `json:"quantity"`
+	Notes           string               `json:"notes"`
+	TotalPriceCents int64                `json:"totalPriceCents"`
+	Service         serviceView          `json:"service"`
+	AssignedTo      *staffView           `json:"assignedTo"`
+	StartedAt       *time.Time           `json:"startedAt"`
+	CompletedAt     *time.Time           `json:"completedAt"`
+	CancelledAt     *time.Time           `json:"cancelledAt"`
+	CreatedAt       time.Time            `json:"createdAt"`
+	UpdatedAt       time.Time            `json:"updatedAt"`
+	Events          []requestEventView   `json:"events"`
+	Stay            *requestStayView     `json:"stay,omitempty"`
+}
+
+type requestStayView struct {
+	ID    uuid.UUID `json:"id"`
+	Guest guestView `json:"guest"`
+	Room  roomView  `json:"room"`
+}
+
+func toServiceRequestView(request models.ServiceRequest, includeStay bool) serviceRequestView {
+	view := serviceRequestView{
+		ID: request.ID, Status: request.Status, Priority: request.Priority, Quantity: request.Quantity,
+		Notes: request.Notes, TotalPriceCents: request.TotalPriceCents, Service: toServiceView(request.Service),
+		StartedAt: request.StartedAt, CompletedAt: request.CompletedAt, CancelledAt: request.CancelledAt,
+		CreatedAt: request.CreatedAt, UpdatedAt: request.UpdatedAt,
+		Events: make([]requestEventView, 0, len(request.Events)),
+	}
+	if request.AssignedTo != nil {
+		staff := toStaffView(*request.AssignedTo)
+		view.AssignedTo = &staff
+	}
+	for _, event := range request.Events {
+		view.Events = append(view.Events, requestEventView{
+			ID: event.ID, EventType: event.EventType, FromStatus: event.FromStatus, ToStatus: event.ToStatus,
+			ActorType: event.ActorType, Note: event.Note, CreatedAt: event.CreatedAt,
+		})
+	}
+	if includeStay {
+		view.Stay = &requestStayView{
+			ID:    request.Stay.ID,
+			Guest: guestView{ID: request.Stay.Guest.ID, FirstName: request.Stay.Guest.FirstName, LastName: request.Stay.Guest.LastName},
+			Room:  toRoomView(request.Stay.Room),
+		}
+	}
+	return view
+}

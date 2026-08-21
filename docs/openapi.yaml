@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: HotelMate API
-  version: 0.3.0
-  description: Tenant-aware identity, reservation lifecycle, room operations, and private online check-in API delivered through Milestone 2.
+  version: 0.4.0
+  description: Tenant-aware identity, stay lifecycle, private online check-in, service catalog, operational request queues, and live request events delivered through Milestone 3.
 servers:
   - url: /api/v1
 security: []
@@ -492,13 +492,296 @@ paths:
         '200':
           description: Original document bytes
           headers:
-            Cache-Control: { schema: { type: string }, description: Always private, no-store. }
+            Cache-Control: { schema: { type: string }, description: 'Always private, no-store.' }
           content:
             application/pdf: { schema: { type: string, format: binary } }
             image/jpeg: { schema: { type: string, format: binary } }
             image/png: { schema: { type: string, format: binary } }
         '404': { $ref: '#/components/responses/NotFound' }
         '410': { $ref: '#/components/responses/NotFound' }
+  /guest/services:
+    get:
+      summary: List the authenticated hotel's active service catalog
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Quick actions first, followed by the full active catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services: { type: array, items: { $ref: '#/components/schemas/Service' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /guest/requests:
+    get:
+      summary: List the current stay's service requests and persisted history
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Stay-scoped requests
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests: { type: array, items: { $ref: '#/components/schemas/ServiceRequest' } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+    post:
+      summary: Create a service request for an active stay
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [serviceId, quantity]
+              properties:
+                serviceId: { type: string, format: uuid }
+                quantity: { type: integer, minimum: 1, maximum: 20 }
+                notes: { type: string, maxLength: 500 }
+      responses:
+        '201':
+          description: New request with a persisted created event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/ServiceRequest' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/requests/{id}/cancel:
+    post:
+      summary: Cancel the current stay's request while it is still new
+      security: [{ guestBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Cancelled request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/ServiceRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/services:
+    get:
+      summary: List active and inactive hotel services
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Tenant-scoped catalog
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services: { type: array, items: { $ref: '#/components/schemas/Service' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a hotel service
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceInput' }
+      responses:
+        '201':
+          description: Service created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service: { $ref: '#/components/schemas/Service' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/services/{id}:
+    patch:
+      summary: Update, reorder, price, or activate a hotel service
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceInput' }
+      responses:
+        '200':
+          description: Updated service
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  service: { $ref: '#/components/schemas/Service' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/requests:
+    get:
+      summary: Read the role-aware operational request queue
+      description: Housekeeping and F&B accounts are always constrained to services assigned to their fulfillment role; category remains an optional filter inside that role-scoped queue.
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/ServiceRequestStatus' }
+        - in: query
+          name: category
+          schema: { $ref: '#/components/schemas/ServiceCategory' }
+        - in: query
+          name: assignedToMe
+          schema: { type: boolean }
+        - in: query
+          name: unassigned
+          schema: { type: boolean }
+      responses:
+        '200':
+          description: Priority-ordered tenant and role-scoped queue
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [requests]
+                properties:
+                  requests: { type: array, items: { $ref: '#/components/schemas/StaffServiceRequest' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /staff/requests/{id}/assign:
+    post:
+      summary: Assign a request to an active hotel staff account
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                staffId: { type: [string, 'null'], format: uuid, description: Defaults to the current staff member. }
+      responses:
+        '200':
+          description: Assigned request with an appended history event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/StaffServiceRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/requests/{id}/priority:
+    post:
+      summary: Change operational priority
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [priority]
+              properties:
+                priority: { type: integer, minimum: 0, maximum: 3 }
+      responses:
+        '200':
+          description: Prioritized request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/StaffServiceRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/requests/{id}/transition:
+    post:
+      summary: Move a request to in-progress, completed, or cancelled
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { type: string, enum: [in_progress, completed, cancelled] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Updated request with an appended status event
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/StaffServiceRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/requests/{id}/notes:
+    post:
+      summary: Append an operational note to request history
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note: { type: string, minLength: 1, maxLength: 500 }
+      responses:
+        '200':
+          description: Request with appended note
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  request: { $ref: '#/components/schemas/StaffServiceRequest' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /events:
+    get:
+      summary: Upgrade to the live request event WebSocket
+      description: Pass `hotelmate.events` and the existing JWT as the two Sec-WebSocket-Protocol values. Events are filtered by signed hotel, guest stay, and staff department. Persisted REST history is authoritative after reconnect.
+      parameters:
+        - in: header
+          name: Sec-WebSocket-Protocol
+          required: true
+          description: The values `hotelmate.events` and the current guest or staff JWT.
+          schema: { type: string, example: 'hotelmate.events, eyJ...' }
+      responses:
+        '101': { description: WebSocket connection established }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
 components:
   parameters:
     HotelSlug:
@@ -650,6 +933,104 @@ components:
           required: [stay]
           properties:
             stay: { $ref: '#/components/schemas/Stay' }
+    ServiceCategory:
+      type: string
+      enum: [housekeeping, food_beverage, transport, wellness, other]
+    Service:
+      type: object
+      required: [id, code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, sortOrder, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        code: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+        name: { type: string }
+        description: { type: string }
+        category: { $ref: '#/components/schemas/ServiceCategory' }
+        icon: { type: string }
+        fulfillmentRole: { type: string, enum: [reception, housekeeping, food_beverage] }
+        estimatedMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        priceCents: { type: integer, format: int64, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        isPaid: { type: boolean }
+        isQuickAction: { type: boolean }
+        sortOrder: { type: integer, minimum: 0 }
+        isActive: { type: boolean }
+    ServiceInput:
+      type: object
+      required: [code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, sortOrder, isActive]
+      properties:
+        code: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 64 }
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        category: { $ref: '#/components/schemas/ServiceCategory' }
+        icon: { type: string, minLength: 2, maxLength: 32 }
+        fulfillmentRole: { type: string, enum: [reception, housekeeping, food_beverage] }
+        estimatedMinutes: { type: integer, minimum: 1, maximum: 1440 }
+        priceCents: { type: integer, format: int64, minimum: 0 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        isPaid: { type: boolean }
+        isQuickAction: { type: boolean }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        isActive: { type: boolean }
+    ServiceRequestStatus:
+      type: string
+      enum: [new, in_progress, completed, cancelled]
+    ServiceRequestEvent:
+      type: object
+      required: [id, eventType, actorType, note, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        eventType: { type: string, enum: [created, assigned, priority_changed, status_changed, note_added] }
+        fromStatus: { $ref: '#/components/schemas/ServiceRequestStatus' }
+        toStatus: { $ref: '#/components/schemas/ServiceRequestStatus' }
+        actorType: { type: string, enum: [guest, staff] }
+        note: { type: string }
+        createdAt: { type: string, format: date-time }
+    ServiceRequest:
+      type: object
+      required: [id, status, priority, quantity, notes, totalPriceCents, service, events, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ServiceRequestStatus' }
+        priority: { type: integer, minimum: 0, maximum: 3 }
+        quantity: { type: integer }
+        notes: { type: string }
+        totalPriceCents: { type: integer, format: int64 }
+        service: { $ref: '#/components/schemas/Service' }
+        assignedTo:
+          oneOf:
+            - $ref: '#/components/schemas/Staff'
+            - type: 'null'
+        startedAt: { type: [string, 'null'], format: date-time }
+        completedAt: { type: [string, 'null'], format: date-time }
+        cancelledAt: { type: [string, 'null'], format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        events: { type: array, items: { $ref: '#/components/schemas/ServiceRequestEvent' } }
+    StaffServiceRequest:
+      allOf:
+        - $ref: '#/components/schemas/ServiceRequest'
+        - type: object
+          required: [stay]
+          properties:
+            stay:
+              type: object
+              required: [id, guest, room]
+              properties:
+                id: { type: string, format: uuid }
+                guest:
+                  type: object
+                  properties:
+                    id: { type: string, format: uuid }
+                    firstName: { type: string }
+                    lastName: { type: string }
+                room: { $ref: '#/components/schemas/Room' }
+    RealtimeEvent:
+      type: object
+      required: [type, payload, emittedAt]
+      properties:
+        type: { type: string, enum: [connected, request.created, request.updated] }
+        payload: { type: object }
+        emittedAt: { type: string, format: date-time }
     SessionBase:
       type: object
       required: [token, tokenType, expiresAt, actorType]

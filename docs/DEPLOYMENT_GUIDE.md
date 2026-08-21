@@ -47,9 +47,15 @@ Call `POST /api/v1/onboarding/hotels` once with the `X-Onboarding-Token` header.
 
 Before an update, take a PostgreSQL backup and retain the currently deployed Git commit/image. Then pull the reviewed commit, build, and run `up -d`. The application records applied schema versions in `hotelmate_schema_migrations`.
 
-M1 and M2 use additive migrations. An M0 development volume may still contain the obsolete plaintext `guests.identity_number` column and global staff email constraint. Do not remove either automatically on a database that may contain data; inspect and migrate that volume explicitly first.
+M1 through M3 use additive migrations. M3 adds and backfills tenant-safe service codes, derives `service_requests.hotel_id` from each stay, converts the legacy assignment column to UUID, creates persisted request events, and seeds missing core services per hotel. An M0 development volume may still contain the obsolete plaintext `guests.identity_number` column and global staff email constraint. Do not remove either automatically on a database that may contain data; inspect and migrate that volume explicitly first.
 
-## 6. Private document retention
+## 6. WebSocket delivery
+
+Nginx proxies `/api/v1/events` through the existing `/api/` location with HTTP/1.1 upgrade headers and a read timeout longer than the API heartbeat. Browser clients connect with `wss://<domain>/api/v1/events` and provide `hotelmate.events` plus the current JWT as WebSocket subprotocol values. Keep `ALLOWED_ORIGINS` aligned with the public HTTPS origin.
+
+Persisted request history from the REST API is authoritative after reconnecting. The bundled realtime hub is process-local, so deploy one API replica for M3. Add a shared pub/sub transport before scaling the API horizontally.
+
+## 7. Private document retention
 
 Online check-in documents are written to the private `uploads-production` volume and are never served by Nginx. Keep `DOCUMENT_MAX_BYTES` and `DOCUMENT_RETENTION` explicit in `.env.production`; the default retention is 720 hours after the later of submission or scheduled departure.
 
@@ -61,6 +67,6 @@ Schedule the purge command at least daily from the deployment directory. For exa
 
 Run `make purge-documents` for the local Compose stack. The command deletes only documents whose stored retention deadline has passed and then marks their metadata deleted. Monitor failures; do not expose or manually sweep the volume as a substitute for this workflow.
 
-## 7. Backups
+## 8. Backups
 
 At minimum, schedule encrypted `pg_dump` backups outside the Docker volume and test restoration regularly. Upload files remain on a Docker volume until the object-storage milestone is delivered. If policy requires those files to be recoverable, encrypt and access-control the volume backup and expire backup copies in line with the document retention policy.

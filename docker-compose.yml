@@ -21,7 +21,7 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-development}
       API_HTTP_ADDR: :8080
-      API_VERSION: ${API_VERSION:-0.3.0}
+      API_VERSION: ${API_VERSION:-0.4.0}
       JWT_SECRET: ${JWT_SECRET:-replace-this-development-secret-now}
       JWT_ISSUER: ${JWT_ISSUER:-hotelmate-api}
       STAFF_TOKEN_TTL: ${STAFF_TOKEN_TTL:-8h}

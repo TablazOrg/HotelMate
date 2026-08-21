@@ -176,15 +176,32 @@ const (
 
 type Service struct {
 	BaseModel
-	HotelID     uuid.UUID       `gorm:"not null;index" json:"hotelId"`
-	Hotel       Hotel           `json:"-"`
-	Name        string          `gorm:"not null" json:"name"`
-	Description string          `json:"description"`
-	Category    ServiceCategory `gorm:"size:32;not null" json:"category"`
-	PriceCents  int64           `gorm:"not null;default:0" json:"priceCents"`
-	Currency    string          `gorm:"size:3;not null;default:IRR" json:"currency"`
-	IsPaid      bool            `gorm:"not null;default:false" json:"isPaid"`
-	IsActive    bool            `gorm:"not null;default:true" json:"isActive"`
+	HotelID          uuid.UUID       `gorm:"type:uuid;not null;index;uniqueIndex:uq_services_hotel_code,priority:1" json:"hotelId"`
+	Hotel            Hotel           `json:"-"`
+	Code             string          `gorm:"size:64;not null;uniqueIndex:uq_services_hotel_code,priority:2" json:"code"`
+	Name             string          `gorm:"not null" json:"name"`
+	Description      string          `json:"description"`
+	Category         ServiceCategory `gorm:"size:32;not null" json:"category"`
+	Icon             string          `gorm:"size:32;not null;default:concierge" json:"icon"`
+	FulfillmentRole  StaffRole       `gorm:"size:32;not null;default:reception" json:"fulfillmentRole"`
+	EstimatedMinutes int             `gorm:"not null;default:30" json:"estimatedMinutes"`
+	PriceCents       int64           `gorm:"not null;default:0" json:"priceCents"`
+	Currency         string          `gorm:"size:3;not null;default:IRR" json:"currency"`
+	IsPaid           bool            `gorm:"not null;default:false" json:"isPaid"`
+	IsQuickAction    bool            `gorm:"not null;default:false;index" json:"isQuickAction"`
+	SortOrder        int             `gorm:"not null;default:0" json:"sortOrder"`
+	IsActive         bool            `gorm:"not null;default:true" json:"isActive"`
+}
+
+func CoreServices(hotelID uuid.UUID) []Service {
+	return []Service{
+		{HotelID: hotelID, Code: "room-cleaning", Name: "نظافت اتاق", Description: "رسیدگی خانه‌داری و مرتب‌سازی اتاق", Category: ServiceCategoryHousekeeping, Icon: "cleaning", FulfillmentRole: StaffRoleHousekeeping, EstimatedMinutes: 30, Currency: "IRR", IsQuickAction: true, SortOrder: 10, IsActive: true},
+		{HotelID: hotelID, Code: "mineral-water", Name: "آب معدنی", Description: "تحویل آب معدنی به اتاق", Category: ServiceCategoryHousekeeping, Icon: "water", FulfillmentRole: StaffRoleHousekeeping, EstimatedMinutes: 15, Currency: "IRR", IsQuickAction: true, SortOrder: 20, IsActive: true},
+		{HotelID: hotelID, Code: "tea-coffee", Name: "چای و قهوه", Description: "سفارش نوشیدنی گرم برای اتاق", Category: ServiceCategoryFNB, Icon: "coffee", FulfillmentRole: StaffRoleFB, EstimatedMinutes: 20, Currency: "IRR", IsQuickAction: true, SortOrder: 30, IsActive: true},
+		{HotelID: hotelID, Code: "amenities", Name: "لوازم بهداشتی", Description: "حوله و اقلام بهداشتی مصرفی", Category: ServiceCategoryHousekeeping, Icon: "amenities", FulfillmentRole: StaffRoleHousekeeping, EstimatedMinutes: 20, Currency: "IRR", IsQuickAction: true, SortOrder: 40, IsActive: true},
+		{HotelID: hotelID, Code: "late-checkout", Name: "خروج دیرهنگام", Description: "بررسی امکان تمدید زمان خروج", Category: ServiceCategoryOther, Icon: "clock", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 15, Currency: "IRR", IsQuickAction: true, SortOrder: 50, IsActive: true},
+		{HotelID: hotelID, Code: "transfer", Name: "ترانسفر", Description: "هماهنگی رفت‌وآمد فرودگاه یا ترمینال", Category: ServiceCategoryTransport, Icon: "car", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 30, Currency: "IRR", IsQuickAction: true, SortOrder: 60, IsActive: true},
+	}
 }
 
 type RequestStatus string
@@ -198,17 +215,45 @@ const (
 
 type ServiceRequest struct {
 	BaseModel
-	StayID          uuid.UUID     `gorm:"not null;index" json:"stayId"`
-	Stay            Stay          `json:"-"`
-	ServiceID       uuid.UUID     `gorm:"not null;index" json:"serviceId"`
-	Service         Service       `json:"service"`
-	AssignedToID    *uuid.UUID    `gorm:"index" json:"assignedToId"`
-	Status          RequestStatus `gorm:"size:24;not null;default:new;index" json:"status"`
-	Priority        int           `gorm:"not null;default:0" json:"priority"`
-	Quantity        int           `gorm:"not null;default:1" json:"quantity"`
-	Notes           string        `json:"notes"`
-	TotalPriceCents int64         `gorm:"not null;default:0" json:"totalPriceCents"`
-	CompletedAt     *time.Time    `json:"completedAt"`
+	HotelID         uuid.UUID             `gorm:"type:uuid;not null;index" json:"hotelId"`
+	StayID          uuid.UUID             `gorm:"not null;index" json:"stayId"`
+	Stay            Stay                  `json:"-"`
+	ServiceID       uuid.UUID             `gorm:"not null;index" json:"serviceId"`
+	Service         Service               `json:"service"`
+	AssignedToID    *uuid.UUID            `gorm:"type:uuid;index" json:"assignedToId"`
+	AssignedTo      *StaffUser            `gorm:"foreignKey:AssignedToID" json:"assignedTo,omitempty"`
+	Status          RequestStatus         `gorm:"size:24;not null;default:new;index" json:"status"`
+	Priority        int                   `gorm:"not null;default:0" json:"priority"`
+	Quantity        int                   `gorm:"not null;default:1" json:"quantity"`
+	Notes           string                `gorm:"size:500" json:"notes"`
+	TotalPriceCents int64                 `gorm:"not null;default:0" json:"totalPriceCents"`
+	StartedAt       *time.Time            `json:"startedAt"`
+	CompletedAt     *time.Time            `json:"completedAt"`
+	CancelledAt     *time.Time            `json:"cancelledAt"`
+	Events          []ServiceRequestEvent `gorm:"foreignKey:RequestID" json:"events,omitempty"`
+}
+
+type RequestEventType string
+
+const (
+	RequestEventCreated  RequestEventType = "created"
+	RequestEventAssigned RequestEventType = "assigned"
+	RequestEventPriority RequestEventType = "priority_changed"
+	RequestEventStatus   RequestEventType = "status_changed"
+	RequestEventNote     RequestEventType = "note_added"
+)
+
+type ServiceRequestEvent struct {
+	BaseModel
+	HotelID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"hotelId"`
+	RequestID  uuid.UUID        `gorm:"type:uuid;not null;index" json:"requestId"`
+	Request    ServiceRequest   `json:"-"`
+	EventType  RequestEventType `gorm:"size:32;not null;index" json:"eventType"`
+	FromStatus *RequestStatus   `gorm:"size:24" json:"fromStatus,omitempty"`
+	ToStatus   *RequestStatus   `gorm:"size:24" json:"toStatus,omitempty"`
+	ActorType  string           `gorm:"size:16;not null" json:"actorType"`
+	ActorID    uuid.UUID        `gorm:"type:uuid;not null;index" json:"actorId"`
+	Note       string           `gorm:"size:500" json:"note"`
 }
 
 type Facility struct {

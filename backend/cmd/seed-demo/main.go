@@ -64,6 +64,17 @@ func seed(db *gorm.DB, settings demoSettings) error {
 				return err
 			}
 		}
+		for _, service := range models.CoreServices(hotel.ID) {
+			var count int64
+			if err := tx.Model(&models.Service{}).Where("hotel_id = ? AND code = ?", hotel.ID, service.Code).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				if err := tx.Create(&service).Error; err != nil {
+					return err
+				}
+			}
+		}
 
 		var staff models.StaffUser
 		err := tx.Where("hotel_id = ? AND email = ?", hotel.ID, strings.ToLower(settings.adminEmail)).First(&staff).Error

@@ -32,7 +32,7 @@ func Load() Config {
 	return Config{
 		Environment:       envOrDefault("APP_ENV", "development"),
 		HTTPAddr:          envOrDefault("API_HTTP_ADDR", ":8080"),
-		APIVersion:        envOrDefault("API_VERSION", "0.3.0"),
+		APIVersion:        envOrDefault("API_VERSION", "0.4.0"),
 		DatabaseURL:       envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
 		JWTSecret:         envOrDefault("JWT_SECRET", "replace-this-development-secret-now"),
 		JWTIssuer:         envOrDefault("JWT_ISSUER", "hotelmate-api"),

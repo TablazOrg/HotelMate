@@ -9,7 +9,7 @@ The attached `PROJECT_DEFINITION.md` describes the product and originally lists 
 - **Database:** PostgreSQL 16.
 - **Local orchestration:** Docker Compose with Postgres, API, and an Nginx-served web build.
 
-The product workflows, roles, and domain entities remain those in the definition. The repository now contains the infrastructure baseline plus the complete M1 identity/access and M2 reservation/stay lifecycle slices; later business modules are delivered milestone by milestone.
+The product workflows, roles, and domain entities remain those in the definition. The repository now contains the infrastructure baseline, complete M1 identity/access and M2 reservation/stay lifecycle slices, and the M3 service-operations backend/realtime foundation. M3 React screens are gated on the approved design handoff and are not finalized from inferred styling.
 
 ## Repository layout
 
@@ -22,6 +22,7 @@ backend/
   internal/auth/        password/identity hashing and audience-bound JWTs
   internal/httpapi/     HTTP handlers and middleware
   internal/models/      domain model foundations
+  internal/realtime/    tenant/stay/department-scoped event fanout
   internal/store/       tenant-scoped GORM persistence
 frontend/
   src/                  React application shell (RTL/Farsi first)
@@ -38,4 +39,8 @@ Reservation confirmation creates exactly one pre-arrival stay in the same transa
 
 Online check-in document bytes live outside the web root behind the `documents.Storage` interface. The local adapter generates server-side keys, MIME-sniffs PDF/JPEG/PNG content, enforces the configured size limit, stores files with restrictive permissions, and exposes bytes only through an authenticated, tenant-scoped staff route. PostgreSQL stores metadata and the retention deadline; the purge command performs explicit expiry deletion.
 
-Real-time transport (WebSocket gateway) and external providers are deliberately introduced in later milestones rather than coupling the identity slice to unfinished product behavior.
+Service requests are hotel- and stay-scoped, snapshot their calculated total, and append immutable creation, assignment, priority, status, and note events. The state machine permits `new → in_progress → completed`, with cancellation from open states. Housekeeping and F&B queues are forcibly constrained to their own categories; reception, operations, and administrators can see the hotel-wide queue.
+
+The `/api/v1/events` WebSocket gateway authenticates the existing JWT through the negotiated subprotocol list. The in-process hub filters publications by hotel, guest stay, and staff department. Slow subscribers are skipped rather than blocking operations; clients recover from persisted REST history after reconnecting. The current hub supports a single API replica. Horizontal API scaling requires a shared pub/sub adapter before multiple replicas are enabled.
+
+External providers remain behind later milestone boundaries.

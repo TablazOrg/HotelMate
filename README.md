@@ -2,7 +2,7 @@
 
 HotelMate connects hotel guests with reception and hotel operations: pre-arrival check-in, service requests, upsells, facilities, restaurant content, and AI-assisted conversations.
 
-The current delivery includes Milestones 0–2: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, pre-arrival guest login, and private online check-in documents. Reception can create and confirm reservations, check guests in and out, and review documents from the responsive RTL operations UI. Later product modules remain tracked in the milestone plan.
+The current delivery includes Milestones 0–2 plus the M3 backend and realtime foundation: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, private online check-in documents, the hotel service catalog, role-scoped request queues, persisted request history, and WebSocket updates. The M3 React flows remain intentionally pending until the approved design handoff is available; no substitute design is treated as final.
 
 ## Stack
 
@@ -46,6 +46,8 @@ The seed is disabled in production and prints its local demo credentials.
 Useful commands are available in the root `Makefile`. When `AUTO_MIGRATE=true`, the API applies reviewed GORM schema steps through the `hotelmate_schema_migrations` ledger.
 
 Online check-in files are stored in the private `uploads` volume, never under the web root. Run `make purge-documents` regularly; production scheduling is documented in the deployment guide.
+
+Realtime clients connect to `/api/v1/events` and send `hotelmate.events` plus the current JWT as WebSocket subprotocol values. The REST request list and persisted event history remain authoritative after a reconnect.
 
 ## Guides
 

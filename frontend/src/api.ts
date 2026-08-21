@@ -95,6 +95,61 @@ export interface OnlineCheckIn {
   stay?: Stay
 }
 
+export type ServiceCategory = 'housekeeping' | 'food_beverage' | 'transport' | 'wellness' | 'other'
+
+export interface Service {
+  id: string
+  code: string
+  name: string
+  description: string
+  category: ServiceCategory
+  icon: string
+  fulfillmentRole: 'reception' | 'housekeeping' | 'food_beverage'
+  estimatedMinutes: number
+  priceCents: number
+  currency: string
+  isPaid: boolean
+  isQuickAction: boolean
+  sortOrder: number
+  isActive: boolean
+}
+
+export type ServiceRequestStatus = 'new' | 'in_progress' | 'completed' | 'cancelled'
+
+export interface ServiceRequestEvent {
+  id: string
+  eventType: 'created' | 'assigned' | 'priority_changed' | 'status_changed' | 'note_added'
+  fromStatus?: ServiceRequestStatus
+  toStatus?: ServiceRequestStatus
+  actorType: ActorType
+  note: string
+  createdAt: string
+}
+
+export interface ServiceRequest {
+  id: string
+  status: ServiceRequestStatus
+  priority: number
+  quantity: number
+  notes: string
+  totalPriceCents: number
+  service: Service
+  assignedTo: Staff | null
+  startedAt: string | null
+  completedAt: string | null
+  cancelledAt: string | null
+  createdAt: string
+  updatedAt: string
+  events: ServiceRequestEvent[]
+  stay?: { id: string; guest: Guest; room: Room }
+}
+
+export interface RealtimeEvent {
+  type: 'connected' | 'request.created' | 'request.updated'
+  payload: { actorType?: ActorType; request?: ServiceRequest }
+  emittedAt: string
+}
+
 export interface SessionRecord {
   actorType: ActorType
   token: string
@@ -148,6 +203,44 @@ export async function apiBlob(path: string, token: string): Promise<{ blob: Blob
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? 'identity-document'
   return { blob: await response.blob(), filename }
+}
+
+export function subscribeRealtime(
+  token: string,
+  onEvent: (event: RealtimeEvent) => void,
+  onConnectionChange?: (connected: boolean) => void,
+) {
+  let closed = false
+  let socket: WebSocket | null = null
+  let reconnectTimer = 0
+  let attempts = 0
+
+  const connect = () => {
+    if (closed) return
+    const endpoint = new URL(`${apiBaseUrl}/api/v1/events`, window.location.origin)
+    endpoint.protocol = endpoint.protocol === 'https:' ? 'wss:' : 'ws:'
+    socket = new WebSocket(endpoint, ['hotelmate.events', token])
+    socket.onopen = () => { attempts = 0; onConnectionChange?.(true) }
+    socket.onmessage = (message) => {
+      try { onEvent(JSON.parse(message.data) as RealtimeEvent) } catch { /* ignore invalid server frames */ }
+    }
+    socket.onerror = () => socket?.close()
+    socket.onclose = () => {
+      onConnectionChange?.(false)
+      if (!closed) {
+        const delay = Math.min(1000 * 2 ** attempts, 15_000)
+        attempts += 1
+        reconnectTimer = window.setTimeout(connect, delay)
+      }
+    }
+  }
+
+  connect()
+  return () => {
+    closed = true
+    window.clearTimeout(reconnectTimer)
+    socket?.close(1000, 'component unmounted')
+  }
 }
 
 const sessionKey = 'hotelmate.session'

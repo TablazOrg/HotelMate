@@ -14,6 +14,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
+	"github.com/TablazOrg/HotelMate/backend/internal/realtime"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 	"gorm.io/gorm"
 )
@@ -22,7 +23,9 @@ type Dependencies struct {
 	DB                *gorm.DB
 	Store             store.Store
 	Lifecycle         store.LifecycleStore
+	ServiceOperations store.ServiceOperationsStore
 	Documents         documents.Storage
+	Realtime          *realtime.Hub
 	Tokens            *auth.TokenManager
 	Version           string
 	AllowedOrigins    []string
@@ -36,7 +39,9 @@ type Server struct {
 	db                *gorm.DB
 	store             store.Store
 	lifecycle         store.LifecycleStore
+	serviceOperations store.ServiceOperationsStore
 	documents         documents.Storage
+	realtime          *realtime.Hub
 	tokens            *auth.TokenManager
 	version           string
 	onboardingToken   string
@@ -46,6 +51,7 @@ type Server struct {
 	onboardLimiter    *ipRateLimiter
 	documentMaxBytes  int64
 	documentRetention time.Duration
+	allowedOrigins    []string
 }
 
 func NewHandler(deps Dependencies) http.Handler {
@@ -59,6 +65,8 @@ func NewHandler(deps Dependencies) http.Handler {
 		store:             deps.Store,
 		lifecycle:         deps.Lifecycle,
 		documents:         deps.Documents,
+		serviceOperations: deps.ServiceOperations,
+		realtime:          deps.Realtime,
 		tokens:            deps.Tokens,
 		version:           deps.Version,
 		onboardingToken:   deps.OnboardingToken,
@@ -68,6 +76,7 @@ func NewHandler(deps Dependencies) http.Handler {
 		onboardLimiter:    newIPRateLimiter(5, 10*time.Minute),
 		documentMaxBytes:  deps.DocumentMaxBytes,
 		documentRetention: deps.DocumentRetention,
+		allowedOrigins:    deps.AllowedOrigins,
 	}
 
 	mux := http.NewServeMux()
@@ -85,6 +94,8 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/staff/users", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.createStaff)))
 	mux.Handle("PATCH /api/v1/staff/hotel", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.updateHotelBranding)))
 	s.registerLifecycleRoutes(mux)
+	s.registerServiceOperationRoutes(mux)
+	s.registerRealtimeRoute(mux)
 
 	return withRecovery(logger, withRequestLog(logger, withSecurityHeaders(withCORS(deps.AllowedOrigins, mux))))
 }
@@ -178,6 +189,8 @@ type statusWriter struct {
 	http.ResponseWriter
 	status int
 }
+
+func (w *statusWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 func (w *statusWriter) WriteHeader(status int) {
 	w.status = status

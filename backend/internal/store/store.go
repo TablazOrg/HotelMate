@@ -44,7 +44,8 @@ func (s *GORMStore) CreateHotelWithPrimaryAdmin(ctx context.Context, onboarding 
 			return err
 		}
 		onboarding.PrimaryAdmin.Hotel = onboarding.Hotel
-		return nil
+		services := models.CoreServices(onboarding.Hotel.ID)
+		return tx.Create(&services).Error
 	})
 }
 

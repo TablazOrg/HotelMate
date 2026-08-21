@@ -15,6 +15,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
 	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/httpapi"
+	"github.com/TablazOrg/HotelMate/backend/internal/realtime"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 )
 
@@ -53,6 +54,7 @@ func main() {
 		os.Exit(1)
 	}
 	repository := store.New(db)
+	realtimeHub := realtime.NewHub()
 	documentStorage, err := documents.NewLocalStorage(cfg.UploadsDir, cfg.DocumentMaxBytes)
 	if err != nil {
 		logger.Error("initialize document storage", "error", err)
@@ -62,7 +64,8 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewHandler(httpapi.Dependencies{
-			DB: db, Store: repository, Lifecycle: repository, Documents: documentStorage, Tokens: tokens, Version: cfg.APIVersion,
+			DB: db, Store: repository, Lifecycle: repository, ServiceOperations: repository,
+			Documents: documentStorage, Realtime: realtimeHub, Tokens: tokens, Version: cfg.APIVersion,
 			AllowedOrigins: cfg.AllowedOrigins, OnboardingToken: cfg.OnboardingToken, Logger: logger,
 			DocumentMaxBytes: cfg.DocumentMaxBytes, DocumentRetention: cfg.DocumentRetention,
 		}),
