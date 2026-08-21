@@ -10,14 +10,20 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/config"
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
 	"github.com/TablazOrg/HotelMate/backend/internal/httpapi"
+	"github.com/TablazOrg/HotelMate/backend/internal/store"
 )
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	cfg := config.Load()
+	if err := cfg.Validate(); err != nil {
+		logger.Error("invalid configuration", "error", err)
+		os.Exit(1)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -40,10 +46,19 @@ func main() {
 		}
 		logger.Info("database migrations complete")
 	}
+	tokens, err := auth.NewTokenManager(cfg.JWTSecret, cfg.JWTIssuer, cfg.StaffTokenTTL, cfg.GuestTokenTTL)
+	if err != nil {
+		logger.Error("initialize token manager", "error", err)
+		os.Exit(1)
+	}
+	repository := store.New(db)
 
 	server := &http.Server{
-		Addr:              cfg.HTTPAddr,
-		Handler:           httpapi.NewHandler(db, cfg.APIVersion, cfg.AllowedOrigins),
+		Addr: cfg.HTTPAddr,
+		Handler: httpapi.NewHandler(httpapi.Dependencies{
+			DB: db, Store: repository, Tokens: tokens, Version: cfg.APIVersion,
+			AllowedOrigins: cfg.AllowedOrigins, OnboardingToken: cfg.OnboardingToken, Logger: logger,
+		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      15 * time.Second,

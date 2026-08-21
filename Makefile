@@ -1,4 +1,4 @@
-.PHONY: dev up down logs backend-test backend-fmt frontend-install frontend-build
+.PHONY: dev up down logs seed-demo backend-test backend-fmt frontend-install frontend-build
 
 dev:
 	@echo "Run 'make up' for the full stack, or start the API and frontend separately."
@@ -11,6 +11,9 @@ down:
 
 logs:
 	docker compose logs -f api postgres
+
+seed-demo:
+	docker compose run --rm --entrypoint /app/seed-demo api
 
 backend-test:
 	cd backend && go test ./...

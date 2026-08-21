@@ -9,13 +9,15 @@ These milestones are derived from the attached project definition. The requested
 - Establish a React + TypeScript + Vite RTL shell and a small API connectivity indicator.
 - Add Docker Compose for Postgres/API/web, health checks, persistent local volumes, environment template, Makefile, and contributor documentation.
 
-## M1 — Identity, tenancy, and access control
+## M1 — Identity, tenancy, and access control (complete)
 
 - Add hotel onboarding and branding settings (logo, primary color, timezone).
 - Implement separate JWT claims and middleware for guests and staff.
 - Implement guest login using room number plus national ID/passport, with privacy-safe responses and audit logging.
 - Implement staff accounts and role permissions: primary admin, secondary admin, operations manager, reception, housekeeping, and F&B.
 - Add migrations and API tests for authentication, authorization, and tenant isolation.
+
+Delivered with a versioned migration ledger, OpenAPI contract, guarded deployment onboarding, bcrypt password/identity verification, audience-separated JWTs, security audit records, role-aware staff management, branding administration, responsive RTL React flows, and database-backed Compose verification.
 
 ## M2 — Guest stay and reservation lifecycle
 

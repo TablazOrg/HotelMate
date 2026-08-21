@@ -1,34 +1,65 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // Config contains process-level configuration. Values are intentionally read
 // from the environment so local, container, and hosted deployments share the
 // same application binary.
 type Config struct {
-	Environment    string
-	HTTPAddr       string
-	APIVersion     string
-	DatabaseURL    string
-	JWTSecret      string
-	AllowedOrigins []string
-	AutoMigrate    bool
+	Environment     string
+	HTTPAddr        string
+	APIVersion      string
+	DatabaseURL     string
+	JWTSecret       string
+	JWTIssuer       string
+	StaffTokenTTL   time.Duration
+	GuestTokenTTL   time.Duration
+	OnboardingToken string
+	AllowedOrigins  []string
+	AutoMigrate     bool
 }
 
 func Load() Config {
 	return Config{
-		Environment:    envOrDefault("APP_ENV", "development"),
-		HTTPAddr:       envOrDefault("API_HTTP_ADDR", ":8080"),
-		APIVersion:     envOrDefault("API_VERSION", "0.1.0"),
-		DatabaseURL:    envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
-		JWTSecret:      envOrDefault("JWT_SECRET", "replace-this-development-secret"),
-		AllowedOrigins: csvEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
-		AutoMigrate:    boolEnv("AUTO_MIGRATE", true),
+		Environment:     envOrDefault("APP_ENV", "development"),
+		HTTPAddr:        envOrDefault("API_HTTP_ADDR", ":8080"),
+		APIVersion:      envOrDefault("API_VERSION", "0.1.0"),
+		DatabaseURL:     envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
+		JWTSecret:       envOrDefault("JWT_SECRET", "replace-this-development-secret-now"),
+		JWTIssuer:       envOrDefault("JWT_ISSUER", "hotelmate-api"),
+		StaffTokenTTL:   durationEnv("STAFF_TOKEN_TTL", 8*time.Hour),
+		GuestTokenTTL:   durationEnv("GUEST_TOKEN_TTL", 24*time.Hour),
+		OnboardingToken: envOrDefault("ONBOARDING_TOKEN", "replace-this-onboarding-token"),
+		AllowedOrigins:  csvEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
+		AutoMigrate:     boolEnv("AUTO_MIGRATE", true),
 	}
+}
+
+func (c Config) Validate() error {
+	if strings.TrimSpace(c.DatabaseURL) == "" {
+		return fmt.Errorf("DATABASE_URL is required")
+	}
+	if len(c.JWTSecret) < 32 {
+		return fmt.Errorf("JWT_SECRET must contain at least 32 characters")
+	}
+	if c.StaffTokenTTL <= 0 || c.GuestTokenTTL <= 0 {
+		return fmt.Errorf("token TTL values must be positive")
+	}
+	if c.Environment == "production" {
+		if strings.HasPrefix(c.JWTSecret, "replace-") {
+			return fmt.Errorf("JWT_SECRET must be changed in production")
+		}
+		if len(c.OnboardingToken) < 24 || strings.HasPrefix(c.OnboardingToken, "replace-") {
+			return fmt.Errorf("ONBOARDING_TOKEN must be a production secret of at least 24 characters")
+		}
+	}
+	return nil
 }
 
 func envOrDefault(key, fallback string) string {
@@ -63,6 +94,18 @@ func boolEnv(key string, fallback bool) bool {
 	}
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
+		return fallback
+	}
+	return parsed
+}
+
+func durationEnv(key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
 		return fallback
 	}
 	return parsed

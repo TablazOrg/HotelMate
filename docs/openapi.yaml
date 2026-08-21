@@ -1,0 +1,356 @@
+openapi: 3.1.0
+info:
+  title: HotelMate API
+  version: 0.2.0
+  description: Tenant-aware identity and branding API delivered in Milestone 1.
+servers:
+  - url: /api/v1
+security: []
+paths:
+  /public/hotels/{slug}:
+    get:
+      summary: Read public hotel branding
+      parameters:
+        - $ref: '#/components/parameters/HotelSlug'
+      responses:
+        '200':
+          description: Public hotel
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hotel]
+                properties:
+                  hotel: { $ref: '#/components/schemas/Hotel' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /onboarding/hotels:
+    post:
+      summary: Create a hotel and its primary administrator
+      description: Requires the deployment-only X-Onboarding-Token header.
+      parameters:
+        - in: header
+          name: X-Onboarding-Token
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OnboardingRequest'
+      responses:
+        '201':
+          description: Hotel created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hotel, primaryAdmin]
+                properties:
+                  hotel: { $ref: '#/components/schemas/Hotel' }
+                  primaryAdmin: { $ref: '#/components/schemas/Staff' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /auth/staff/login:
+    post:
+      summary: Authenticate hotel staff
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hotelSlug, email, password]
+              properties:
+                hotelSlug: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Staff session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/StaffSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/guest/login:
+    post:
+      summary: Authenticate a resident guest
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hotelSlug, roomNumber, identityNumber]
+              properties:
+                hotelSlug: { type: string }
+                roomNumber: { type: string }
+                identityNumber: { type: string, minLength: 4 }
+      responses:
+        '200':
+          description: Guest session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /staff/me:
+    get:
+      summary: Read the current staff principal
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Current staff
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actorType, staff, hotel]
+                properties:
+                  actorType: { const: staff }
+                  staff: { $ref: '#/components/schemas/Staff' }
+                  hotel: { $ref: '#/components/schemas/Hotel' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /guest/me:
+    get:
+      summary: Read the current active guest stay
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Current stay
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [actorType, stay]
+                properties:
+                  actorType: { const: guest }
+                  stay: { $ref: '#/components/schemas/Stay' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /staff/users:
+    get:
+      summary: List staff in the authenticated hotel
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Tenant-scoped staff
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [staff]
+                properties:
+                  staff:
+                    type: array
+                    items: { $ref: '#/components/schemas/Staff' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a staff account in the authenticated hotel
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [firstName, lastName, email, password, role]
+              properties:
+                firstName: { type: string, minLength: 2 }
+                lastName: { type: string, minLength: 2 }
+                email: { type: string, format: email }
+                password: { type: string, format: password, minLength: 12 }
+                role: { $ref: '#/components/schemas/StaffRole' }
+      responses:
+        '201':
+          description: Staff created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  staff: { $ref: '#/components/schemas/Staff' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/hotel:
+    patch:
+      summary: Update authenticated hotel branding
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, logoUrl, primaryColor, timezone]
+              properties:
+                name: { type: string, minLength: 2, maxLength: 120 }
+                logoUrl: { type: string }
+                primaryColor: { type: string, pattern: '^#[0-9a-fA-F]{6}$' }
+                timezone: { type: string, maxLength: 64 }
+      responses:
+        '200':
+          description: Branding updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hotel: { $ref: '#/components/schemas/Hotel' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+components:
+  parameters:
+    HotelSlug:
+      name: slug
+      in: path
+      required: true
+      schema: { type: string }
+  securitySchemes:
+    staffBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT with the hotelmate:staff audience.
+    guestBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT with the hotelmate:guest audience and an active stay.
+  schemas:
+    Hotel:
+      type: object
+      required: [id, name, slug, logoUrl, primaryColor, timezone]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        slug: { type: string }
+        logoUrl: { type: string }
+        primaryColor: { type: string }
+        timezone: { type: string }
+    StaffRole:
+      type: string
+      enum: [primary_admin, secondary_admin, operations_manager, reception, housekeeping, food_beverage]
+    Staff:
+      type: object
+      required: [id, firstName, lastName, email, role, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        firstName: { type: string }
+        lastName: { type: string }
+        email: { type: string, format: email }
+        role: { $ref: '#/components/schemas/StaffRole' }
+        isActive: { type: boolean }
+        lastLoginAt: { type: [string, 'null'], format: date-time }
+    Stay:
+      type: object
+      required: [id, status, guest, room, hotel]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, enum: [active, pre_arrival, checked_out] }
+        guest:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+        room:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            number: { type: string }
+            floor: { type: integer }
+            type: { type: string }
+        hotel: { $ref: '#/components/schemas/Hotel' }
+        checkInAt: { type: [string, 'null'], format: date-time }
+        checkOutAt: { type: [string, 'null'], format: date-time }
+    SessionBase:
+      type: object
+      required: [token, tokenType, expiresAt, actorType]
+      properties:
+        token: { type: string }
+        tokenType: { const: Bearer }
+        expiresAt: { type: string, format: date-time }
+        actorType: { type: string, enum: [staff, guest] }
+    StaffSession:
+      allOf:
+        - $ref: '#/components/schemas/SessionBase'
+        - type: object
+          required: [staff, hotel]
+          properties:
+            actorType: { const: staff }
+            staff: { $ref: '#/components/schemas/Staff' }
+            hotel: { $ref: '#/components/schemas/Hotel' }
+    GuestSession:
+      allOf:
+        - $ref: '#/components/schemas/SessionBase'
+        - type: object
+          required: [stay]
+          properties:
+            actorType: { const: guest }
+            stay: { $ref: '#/components/schemas/Stay' }
+    OnboardingRequest:
+      type: object
+      required: [hotel, primaryAdmin]
+      properties:
+        hotel:
+          type: object
+          required: [name, slug]
+          properties:
+            name: { type: string }
+            slug: { type: string }
+            logoUrl: { type: string }
+            primaryColor: { type: string, default: '#0f766e' }
+            timezone: { type: string, default: Asia/Tehran }
+        primaryAdmin:
+          type: object
+          required: [firstName, lastName, email, password]
+          properties:
+            firstName: { type: string }
+            lastName: { type: string }
+            email: { type: string, format: email }
+            password: { type: string, format: password, minLength: 12 }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+  responses:
+    Unauthorized:
+      description: Authentication failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Role is not permitted
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Resource not found
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Conflict:
+      description: Unique resource already exists
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ValidationFailed:
+      description: Input validation failed
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    RateLimited:
+      description: Too many authentication attempts
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }

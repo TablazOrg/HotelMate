@@ -2,6 +2,8 @@
 
 HotelMate connects hotel guests with reception and hotel operations: pre-arrival check-in, service requests, upsells, facilities, restaurant content, and AI-assisted conversations.
 
+The current delivery includes the infrastructure baseline and Milestone 1 identity/access slice: hotel onboarding and branding, separate guest/staff JWT sessions, tenant-scoped staff roles, audit events, and responsive RTL login/admin flows. Later product modules remain tracked in the milestone plan.
+
 ## Stack
 
 - **API:** Go 1.24, `net/http`, GORM
@@ -9,7 +11,7 @@ HotelMate connects hotel guests with reception and hotel operations: pre-arrival
 - **Database:** PostgreSQL 16
 - **Local runtime:** Docker Compose + Nginx
 
-The attached project definition is the product source of truth. Its original Node/Prisma implementation table is superseded by the stack above, as requested for this development phase. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/MILESTONES.md](docs/MILESTONES.md).
+The attached project definition is the product source of truth. Its original Node/Prisma implementation table is superseded by the stack above, as requested for this development phase. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/MILESTONES.md](docs/MILESTONES.md), and [docs/openapi.yaml](docs/openapi.yaml).
 
 ## Quick start
 
@@ -27,10 +29,24 @@ Then open:
 If port `8080` is already in use, set `API_PORT=8081` and
 `VITE_API_BASE_URL=http://localhost:8081` in `.env` before starting Compose.
 
+Create a local hotel, primary administrator, room, guest, and active stay with:
+
+```bash
+make seed-demo
+```
+
+The seed is disabled in production and prints its local demo credentials.
+
 ## Local development without Docker
 
 1. Start PostgreSQL and set `DATABASE_URL` (see `.env.example`).
 2. Run the API: `cd backend && go run ./cmd/api`.
 3. Install and run the web app: `cd frontend && npm install && npm run dev`.
 
-Useful commands are available in the root `Makefile`. The initial API runs GORM `AutoMigrate` in development; production deployments should use reviewed, versioned migrations before rollout.
+Useful commands are available in the root `Makefile`. When `AUTO_MIGRATE=true`, the API applies reviewed GORM schema steps through the `hotelmate_schema_migrations` ledger.
+
+## Guides
+
+- [Beginner guide](docs/BEGINNER_GUIDE.md)
+- [Production deployment](docs/DEPLOYMENT_GUIDE.md)
+- [Foreign VPS notes](docs/FOREIGN_VPS_GUIDE.md)

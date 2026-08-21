@@ -1,6 +1,7 @@
 package models
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/google/uuid"
@@ -32,11 +33,13 @@ type Hotel struct {
 
 type Guest struct {
 	BaseModel
-	FirstName      string `gorm:"not null" json:"firstName"`
-	LastName       string `gorm:"not null" json:"lastName"`
-	IdentityType   string `gorm:"size:20;not null" json:"identityType"`
-	IdentityNumber string `gorm:"not null;index" json:"-"`
-	Phone          string `json:"phone"`
+	HotelID            uuid.UUID `gorm:"type:uuid;not null;index" json:"hotelId"`
+	Hotel              Hotel     `json:"-"`
+	FirstName          string    `gorm:"not null" json:"firstName"`
+	LastName           string    `gorm:"not null" json:"lastName"`
+	IdentityType       string    `gorm:"size:20;not null" json:"identityType"`
+	IdentityNumberHash string    `gorm:"not null" json:"-"`
+	Phone              string    `json:"phone"`
 }
 
 type StaffRole string
@@ -52,14 +55,15 @@ const (
 
 type StaffUser struct {
 	BaseModel
-	HotelID      uuid.UUID `gorm:"not null;index" json:"hotelId"`
-	Hotel        Hotel     `json:"-"`
-	FirstName    string    `gorm:"not null" json:"firstName"`
-	LastName     string    `gorm:"not null" json:"lastName"`
-	Email        string    `gorm:"not null;uniqueIndex" json:"email"`
-	PasswordHash string    `gorm:"not null" json:"-"`
-	Role         StaffRole `gorm:"size:32;not null" json:"role"`
-	IsActive     bool      `gorm:"not null;default:true" json:"isActive"`
+	HotelID      uuid.UUID  `gorm:"type:uuid;not null;index;uniqueIndex:uq_staff_hotel_email,priority:1" json:"hotelId"`
+	Hotel        Hotel      `json:"-"`
+	FirstName    string     `gorm:"not null" json:"firstName"`
+	LastName     string     `gorm:"not null" json:"lastName"`
+	Email        string     `gorm:"not null;uniqueIndex:uq_staff_hotel_email,priority:2" json:"email"`
+	PasswordHash string     `gorm:"not null" json:"-"`
+	Role         StaffRole  `gorm:"size:32;not null" json:"role"`
+	IsActive     bool       `gorm:"not null;default:true" json:"isActive"`
+	LastLoginAt  *time.Time `json:"lastLoginAt"`
 }
 
 type RoomStatus string
@@ -73,9 +77,9 @@ const (
 
 type Room struct {
 	BaseModel
-	HotelID uuid.UUID  `gorm:"not null;index" json:"hotelId"`
+	HotelID uuid.UUID  `gorm:"type:uuid;not null;index;uniqueIndex:uq_rooms_hotel_number,priority:1" json:"hotelId"`
 	Hotel   Hotel      `json:"-"`
-	Number  string     `gorm:"not null" json:"number"`
+	Number  string     `gorm:"not null;uniqueIndex:uq_rooms_hotel_number,priority:2" json:"number"`
 	Floor   int        `json:"floor"`
 	Type    string     `gorm:"size:64" json:"type"`
 	Status  RoomStatus `gorm:"size:24;not null;default:available" json:"status"`
@@ -266,4 +270,35 @@ type Message struct {
 	Role           MessageRole  `gorm:"size:16;not null" json:"role"`
 	Body           string       `gorm:"not null;type:text" json:"body"`
 	Confidence     *float64     `json:"confidence,omitempty"`
+}
+
+type AuditOutcome string
+
+const (
+	AuditOutcomeSuccess AuditOutcome = "success"
+	AuditOutcomeFailure AuditOutcome = "failure"
+)
+
+// AuditLog records security-sensitive actions without storing credentials or
+// identity numbers. Metadata must only contain privacy-safe operational data.
+type AuditLog struct {
+	ID        uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
+	CreatedAt time.Time       `gorm:"not null;index" json:"createdAt"`
+	HotelID   *uuid.UUID      `gorm:"type:uuid;index" json:"hotelId,omitempty"`
+	ActorID   *uuid.UUID      `gorm:"type:uuid;index" json:"actorId,omitempty"`
+	ActorType string          `gorm:"size:20;not null;index" json:"actorType"`
+	Action    string          `gorm:"size:80;not null;index" json:"action"`
+	Outcome   AuditOutcome    `gorm:"size:16;not null;index" json:"outcome"`
+	IPAddress string          `gorm:"size:64" json:"ipAddress"`
+	Metadata  json.RawMessage `gorm:"type:jsonb;not null;default:'{}'" json:"metadata"`
+}
+
+func (m *AuditLog) BeforeCreate(_ *gorm.DB) error {
+	if m.ID == uuid.Nil {
+		m.ID = uuid.New()
+	}
+	if len(m.Metadata) == 0 {
+		m.Metadata = json.RawMessage(`{}`)
+	}
+	return nil
 }
