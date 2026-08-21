@@ -96,7 +96,7 @@ func (f *fakeStore) FindActiveStayForGuestLogin(_ context.Context, slug, room st
 }
 
 func (f *fakeStore) FindGuestSession(_ context.Context, hotelID, guestID, stayID uuid.UUID) (models.Stay, error) {
-	if f.stay.HotelID != hotelID || f.stay.GuestID != guestID || f.stay.ID != stayID || f.stay.Status != models.StayActive {
+	if f.stay.HotelID != hotelID || f.stay.GuestID != guestID || f.stay.ID != stayID || (f.stay.Status != models.StayActive && f.stay.Status != models.StayPreArrival) {
 		return models.Stay{}, gorm.ErrRecordNotFound
 	}
 	return f.stay, nil

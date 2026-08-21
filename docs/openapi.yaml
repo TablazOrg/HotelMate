@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: HotelMate API
-  version: 0.2.0
-  description: Tenant-aware identity and branding API delivered in Milestone 1.
+  version: 0.3.0
+  description: Tenant-aware identity, reservation lifecycle, room operations, and private online check-in API delivered through Milestone 2.
 servers:
   - url: /api/v1
 security: []
@@ -97,6 +97,30 @@ paths:
               schema: { $ref: '#/components/schemas/GuestSession' }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/guest/reservation:
+    post:
+      summary: Authenticate a guest against a confirmed reservation
+      description: Creates or reuses the reservation's unique pre-arrival stay.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [hotelSlug, confirmationCode, identityNumber]
+              properties:
+                hotelSlug: { type: string }
+                confirmationCode: { type: string, minLength: 6 }
+                identityNumber: { type: string, minLength: 4 }
+      responses:
+        '200':
+          description: Pre-arrival guest session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestSession' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /staff/me:
     get:
       summary: Read the current staff principal
@@ -129,6 +153,10 @@ paths:
                 properties:
                   actorType: { const: guest }
                   stay: { $ref: '#/components/schemas/Stay' }
+                  onlineCheckIn:
+                    oneOf:
+                      - $ref: '#/components/schemas/OnlineCheckIn'
+                      - type: 'null'
         '401': { $ref: '#/components/responses/Unauthorized' }
   /staff/users:
     get:
@@ -202,6 +230,275 @@ paths:
                   hotel: { $ref: '#/components/schemas/Hotel' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/rooms:
+    get:
+      summary: List rooms in the authenticated hotel
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Tenant-scoped room list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [rooms]
+                properties:
+                  rooms: { type: array, items: { $ref: '#/components/schemas/Room' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a room
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [number, floor]
+              properties:
+                number: { type: string, maxLength: 20 }
+                floor: { type: integer, minimum: -5, maximum: 200 }
+                type: { type: string, maxLength: 64 }
+      responses:
+        '201':
+          description: Room created as available
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room: { $ref: '#/components/schemas/Room' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/rooms/{id}/status:
+    patch:
+      summary: Change a non-occupied room's operational status
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status: { $ref: '#/components/schemas/RoomStatus' }
+      responses:
+        '200':
+          description: Updated room
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  room: { $ref: '#/components/schemas/Room' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/reservations:
+    get:
+      summary: List hotel reservations
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/ReservationStatus' }
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Tenant-scoped reservation list
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [reservations]
+                properties:
+                  reservations: { type: array, items: { $ref: '#/components/schemas/Reservation' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      summary: Create a pending reservation and guest
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateReservation' }
+      responses:
+        '201':
+          description: Pending reservation with generated confirmation code
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservation: { $ref: '#/components/schemas/Reservation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/reservations/{id}/confirm:
+    post:
+      summary: Atomically confirm a reservation and create its pre-arrival stay
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Confirmed reservation and unique stay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  reservation: { $ref: '#/components/schemas/Reservation' }
+                  stay: { $ref: '#/components/schemas/Stay' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/stays/{id}/check-in:
+    post:
+      summary: Check in a pre-arrival stay and mark its assigned room occupied
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roomId]
+              properties:
+                roomId: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Active stay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stay: { $ref: '#/components/schemas/Stay' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/stays/{id}/check-out:
+    post:
+      summary: Check out a stay, complete its reservation, and mark the room cleaning
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Checked-out stay
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stay: { $ref: '#/components/schemas/Stay' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /guest/online-check-in:
+    get:
+      summary: Read the current stay's online check-in metadata
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Current submission or null
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onlineCheckIn:
+                    oneOf:
+                      - $ref: '#/components/schemas/OnlineCheckIn'
+                      - type: 'null'
+    post:
+      summary: Submit or replace a pre-arrival identity document
+      description: Accepts a MIME-sniffed PDF, JPEG, or PNG. The default maximum is 5 MiB.
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document]
+              properties:
+                document: { type: string, format: binary }
+      responses:
+        '201':
+          description: Private document metadata; no storage key or digest is exposed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onlineCheckIn: { $ref: '#/components/schemas/OnlineCheckIn' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '413': { $ref: '#/components/responses/ValidationFailed' }
+        '415': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/online-check-ins:
+    get:
+      summary: List online check-ins for the authenticated hotel
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/OnlineCheckInStatus' }
+      responses:
+        '200':
+          description: Tenant-scoped submissions with stay details
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onlineCheckIns: { type: array, items: { $ref: '#/components/schemas/OnlineCheckInWithStay' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /staff/online-check-ins/{id}/review:
+    post:
+      summary: Approve or reject an online check-in
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, note]
+              properties:
+                status: { type: string, enum: [approved, rejected] }
+                note: { type: string, maxLength: 500, description: Required when rejecting. }
+      responses:
+        '200':
+          description: Reviewed submission
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  onlineCheckIn: { $ref: '#/components/schemas/OnlineCheckIn' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/online-check-ins/{id}/document:
+    get:
+      summary: Download a retained private identity document
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Original document bytes
+          headers:
+            Cache-Control: { schema: { type: string }, description: Always private, no-store. }
+          content:
+            application/pdf: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { $ref: '#/components/responses/NotFound' }
 components:
   parameters:
     HotelSlug:
@@ -209,6 +506,11 @@ components:
       in: path
       required: true
       schema: { type: string }
+    ResourceID:
+      name: id
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
   securitySchemes:
     staffBearer:
       type: http
@@ -258,15 +560,96 @@ components:
             firstName: { type: string }
             lastName: { type: string }
         room:
-          type: object
-          properties:
-            id: { type: string, format: uuid }
-            number: { type: string }
-            floor: { type: integer }
-            type: { type: string }
+          $ref: '#/components/schemas/Room'
         hotel: { $ref: '#/components/schemas/Hotel' }
         checkInAt: { type: [string, 'null'], format: date-time }
         checkOutAt: { type: [string, 'null'], format: date-time }
+        reservation: { $ref: '#/components/schemas/Reservation' }
+    RoomStatus:
+      type: string
+      enum: [available, occupied, cleaning, out_of_service]
+    Room:
+      type: object
+      required: [id, number, floor, type, status]
+      properties:
+        id: { type: string, format: uuid }
+        number: { type: string }
+        floor: { type: integer }
+        type: { type: string }
+        status: { $ref: '#/components/schemas/RoomStatus' }
+    ReservationStatus:
+      type: string
+      enum: [pending, confirmed, cancelled, completed]
+    Reservation:
+      type: object
+      required: [id, status, confirmationCode, arrivalDate, departureDate, guest]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ReservationStatus' }
+        confirmationCode: { type: string }
+        arrivalDate: { type: string, format: date-time }
+        departureDate: { type: string, format: date-time }
+        confirmedAt: { type: [string, 'null'], format: date-time }
+        guest:
+          type: object
+          required: [id, firstName, lastName]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+        room:
+          oneOf:
+            - $ref: '#/components/schemas/Room'
+            - type: 'null'
+        stay:
+          type: object
+          properties:
+            id: { type: string, format: uuid }
+            status: { type: string, enum: [pre_arrival, active, checked_out] }
+            room: { $ref: '#/components/schemas/Room' }
+            checkInAt: { type: [string, 'null'], format: date-time }
+            checkOutAt: { type: [string, 'null'], format: date-time }
+    CreateReservation:
+      type: object
+      required: [guest, roomId, arrivalDate, departureDate]
+      properties:
+        guest:
+          type: object
+          required: [firstName, lastName, identityType, identityNumber]
+          properties:
+            firstName: { type: string, minLength: 2 }
+            lastName: { type: string, minLength: 2 }
+            identityType: { type: string, enum: [national_id, passport] }
+            identityNumber: { type: string, minLength: 4 }
+            phone: { type: string }
+        roomId: { type: string, format: uuid }
+        arrivalDate: { type: string, format: date }
+        departureDate: { type: string, format: date }
+    OnlineCheckInStatus:
+      type: string
+      enum: [submitted, approved, rejected]
+    OnlineCheckIn:
+      type: object
+      required: [id, status, documentName, documentMediaType, documentSize, submittedAt, retentionUntil, documentAvailable]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/OnlineCheckInStatus' }
+        documentName: { type: string }
+        documentMediaType: { type: string, enum: [application/pdf, image/jpeg, image/png] }
+        documentSize: { type: integer, format: int64 }
+        submittedAt: { type: string, format: date-time }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewedById: { type: [string, 'null'], format: uuid }
+        reviewNote: { type: string }
+        retentionUntil: { type: string, format: date-time }
+        documentAvailable: { type: boolean }
+    OnlineCheckInWithStay:
+      allOf:
+        - $ref: '#/components/schemas/OnlineCheckIn'
+        - type: object
+          required: [stay]
+          properties:
+            stay: { $ref: '#/components/schemas/Stay' }
     SessionBase:
       type: object
       required: [token, tokenType, expiresAt, actorType]

@@ -132,10 +132,12 @@ func (s *GORMStore) FindActiveStayForGuestLogin(ctx context.Context, hotelSlug, 
 func (s *GORMStore) FindGuestSession(ctx context.Context, hotelID, guestID, stayID uuid.UUID) (models.Stay, error) {
 	var stay models.Stay
 	err := s.db.WithContext(ctx).
-		Where("hotel_id = ? AND guest_id = ? AND id = ? AND status = ?", hotelID, guestID, stayID, models.StayActive).
+		Where("hotel_id = ? AND guest_id = ? AND id = ? AND status IN ?", hotelID, guestID, stayID, []models.StayStatus{models.StayPreArrival, models.StayActive}).
 		Preload("Guest").
 		Preload("Hotel").
 		Preload("Room").
+		Preload("Reservation.Guest").
+		Preload("Reservation.Room").
 		First(&stay).Error
 	return stay, err
 }

@@ -13,6 +13,8 @@ import {
   type StaffRole,
   type Stay,
 } from './api'
+import { GuestCheckInPanel } from './GuestCheckInPanel'
+import { OperationsPanel } from './OperationsPanel'
 
 type AuthenticatedState = {
   session: SessionRecord
@@ -78,7 +80,7 @@ function App() {
   if (!authState) return <LoginScreen onAuthenticated={authenticate} />
 
   if (authState.session.actorType === 'guest' && authState.stay) {
-    return <GuestDashboard stay={authState.stay} onLogout={logout} />
+    return <GuestDashboard stay={authState.stay} token={authState.session.token} onLogout={logout} />
   }
 
   if (authState.staff && authState.hotel) {
@@ -97,8 +99,10 @@ function App() {
 
 function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLoginResponse | GuestLoginResponse) => void }) {
   const [mode, setMode] = useState<'guest' | 'staff'>('guest')
+  const [guestAccess, setGuestAccess] = useState<'reservation' | 'room'>('reservation')
   const [hotelSlug, setHotelSlug] = useState('')
   const [roomNumber, setRoomNumber] = useState('')
+  const [confirmationCode, setConfirmationCode] = useState('')
   const [identityNumber, setIdentityNumber] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -141,9 +145,13 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLog
         })
         onAuthenticated(response)
       } else {
-        const response = await api<GuestLoginResponse>('/api/v1/auth/guest/login', {
+        const path = guestAccess === 'reservation' ? '/api/v1/auth/guest/reservation' : '/api/v1/auth/guest/login'
+        const credentials = guestAccess === 'reservation'
+          ? { hotelSlug, confirmationCode, identityNumber }
+          : { hotelSlug, roomNumber, identityNumber }
+        const response = await api<GuestLoginResponse>(path, {
           method: 'POST',
-          body: JSON.stringify({ hotelSlug, roomNumber, identityNumber }),
+          body: JSON.stringify(credentials),
         })
         onAuthenticated(response)
       }
@@ -185,7 +193,13 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLog
             <label>شناسه هتل<input value={hotelSlug} onChange={(e) => setHotelSlug(e.target.value)} placeholder="example-hotel" autoComplete="organization" required /></label>
             {mode === 'guest' ? (
               <>
-                <label>شماره اتاق<input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} inputMode="numeric" autoComplete="off" required /></label>
+                <div className="guest-access-tabs" role="tablist" aria-label="مرحله اقامت">
+                  <button type="button" className={guestAccess === 'reservation' ? 'active' : ''} onClick={() => setGuestAccess('reservation')}>پیش از ورود</button>
+                  <button type="button" className={guestAccess === 'room' ? 'active' : ''} onClick={() => setGuestAccess('room')}>در حال اقامت</button>
+                </div>
+                {guestAccess === 'reservation'
+                  ? <label>کد تأیید رزرو<input value={confirmationCode} onChange={(e) => setConfirmationCode(e.target.value.toUpperCase())} autoComplete="off" dir="ltr" required /></label>
+                  : <label>شماره اتاق<input value={roomNumber} onChange={(e) => setRoomNumber(e.target.value)} inputMode="numeric" autoComplete="off" required /></label>}
                 <label>کد ملی یا شماره پاسپورت<input value={identityNumber} onChange={(e) => setIdentityNumber(e.target.value)} autoComplete="off" required /></label>
               </>
             ) : (
@@ -197,7 +211,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLog
             {error && <div className="form-error" role="alert">{error}</div>}
             <button className="primary-button" disabled={submitting}>{submitting ? 'در حال ورود…' : 'ورود امن'}</button>
           </form>
-          <p className="privacy-note">اطلاعات هویتی شما ذخیره یا در گزارش‌ها نمایش داده نمی‌شود.</p>
+          <p className="privacy-note">شماره خام مدرک هویتی ذخیره یا در گزارش‌ها نمایش داده نمی‌شود.</p>
         </div>
       </section>
     </main>
@@ -217,26 +231,32 @@ function AppHeader({ hotel, title, subtitle, onLogout }: { hotel: Hotel; title: 
   )
 }
 
-function GuestDashboard({ stay, onLogout }: { stay: Stay; onLogout: () => void }) {
+function GuestDashboard({ stay, token, onLogout }: { stay: Stay; token: string; onLogout: () => void }) {
   const services = [
     ['نظافت اتاق', 'درخواست رسیدگی خانه‌داری'], ['آب معدنی', 'تحویل آب به اتاق'],
     ['چای و قهوه', 'سفارش نوشیدنی گرم'], ['لوازم بهداشتی', 'حوله و اقلام مصرفی'],
     ['خروج دیرهنگام', 'بررسی امکان تمدید'], ['ترانسفر', 'هماهنگی رفت‌وآمد'],
   ]
+  const isPreArrival = stay.status === 'pre_arrival'
+  const arrival = stay.reservation?.arrivalDate
   return (
     <div className="app-shell" style={{ '--brand': stay.hotel.primaryColor } as React.CSSProperties}>
-      <AppHeader hotel={stay.hotel} title={`سلام ${stay.guest.firstName}`} subtitle={`اتاق ${stay.room.number}`} onLogout={onLogout} />
+      <AppHeader hotel={stay.hotel} title={`سلام ${stay.guest.firstName}`} subtitle={isPreArrival ? 'رزرو پیش از ورود' : `اتاق ${stay.room.number}`} onLogout={onLogout} />
       <main className="dashboard">
         <section className="welcome-card">
-          <div><p className="eyebrow">اقامت فعال</p><h2>چه کمکی از ما برمی‌آید؟</h2><p>درخواست‌های شما مستقیماً به تیم مربوطه ارسال می‌شود.</p></div>
-          <div className="room-badge"><small>شماره اتاق</small><strong>{stay.room.number}</strong></div>
+          <div>
+            <p className="eyebrow">{isPreArrival ? 'رزرو تأیید شده' : 'اقامت فعال'}</p>
+            <h2>{isPreArrival ? 'برای ورود سریع‌تر آماده شوید.' : 'چه کمکی از ما برمی‌آید؟'}</h2>
+            <p>{isPreArrival ? 'مدرک هویتی را پیش از رسیدن، امن و مستقیم برای پذیرش ارسال کنید.' : 'درخواست‌های شما مستقیماً به تیم مربوطه ارسال می‌شود.'}</p>
+          </div>
+          <div className="room-badge"><small>{isPreArrival ? 'تاریخ ورود' : 'شماره اتاق'}</small><strong>{isPreArrival && arrival ? new Intl.DateTimeFormat('fa-IR', { month: 'short', day: 'numeric' }).format(new Date(arrival)) : stay.room.number}</strong></div>
         </section>
-        <section className="section-block">
+        {isPreArrival ? <GuestCheckInPanel token={token} /> : <section className="section-block">
           <div className="section-heading"><div><p>دسترسی سریع</p><h2>خدمات پرکاربرد</h2></div><span className="coming-label">فعال‌سازی در M3</span></div>
           <div className="service-grid">
             {services.map(([name, description], index) => <button disabled key={name}><span>{String(index + 1).padStart(2, '0')}</span><strong>{name}</strong><small>{description}</small></button>)}
           </div>
-        </section>
+        </section>}
       </main>
     </div>
   )
@@ -245,6 +265,7 @@ function GuestDashboard({ stay, onLogout }: { stay: Stay; onLogout: () => void }
 function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { session: SessionRecord; initialStaff: Staff; initialHotel: Hotel; onLogout: () => void }) {
   const [hotel, setHotel] = useState(initialHotel)
   const isAdmin = initialStaff.role === 'primary_admin' || initialStaff.role === 'secondary_admin'
+  const hasLifecycleAccess = isAdmin || initialStaff.role === 'operations_manager' || initialStaff.role === 'reception'
   return (
     <div className="app-shell" style={{ '--brand': hotel.primaryColor } as React.CSSProperties}>
       <AppHeader hotel={hotel} title="پنل عملیات هتل" subtitle={roleLabels[initialStaff.role]} onLogout={onLogout} />
@@ -253,14 +274,15 @@ function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { ses
           <div><p className="eyebrow">{roleLabels[initialStaff.role]}</p><h2>{initialStaff.firstName} {initialStaff.lastName}</h2><p>دسترسی‌ها به هتل {hotel.name} محدود شده‌اند.</p></div>
           <span className="security-badge">نشست امن و ثبت‌شده</span>
         </section>
+        {hasLifecycleAccess && <OperationsPanel token={session.token} />}
         {isAdmin ? (
           <div className="admin-grid">
             <BrandingPanel hotel={hotel} token={session.token} onUpdated={setHotel} />
             <StaffPanel currentStaff={initialStaff} token={session.token} />
           </div>
-        ) : (
+        ) : !hasLifecycleAccess ? (
           <section className="empty-panel"><h2>صف عملیات</h2><p>صف درخواست‌های مرتبط با نقش شما در Milestone 3 فعال می‌شود.</p></section>
-        )}
+        ) : null}
       </main>
     </div>
   )

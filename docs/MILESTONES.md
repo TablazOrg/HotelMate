@@ -19,12 +19,14 @@ These milestones are derived from the attached project definition. The requested
 
 Delivered with a versioned migration ledger, OpenAPI contract, guarded deployment onboarding, bcrypt password/identity verification, audience-separated JWTs, security audit records, role-aware staff management, branding administration, responsive RTL React flows, and database-backed Compose verification.
 
-## M2 — Guest stay and reservation lifecycle
+## M2 — Guest stay and reservation lifecycle (complete)
 
 - Build reservation lookup and confirmed-reservation to pre-arrival stay conversion.
 - Implement reception check-in/check-out and room status transitions.
 - Add online check-in workflow with local document handling, validation, and retention rules.
 - Deliver guest-facing pages for pre-arrival and active-stay states.
+
+Delivered with an atomic reservation → pre-arrival → active → checked-out state machine, room availability/occupied/cleaning transitions, reservation overlap protection, tenant- and role-bound reception APIs, private MIME-sniffed document storage, SHA-256 metadata, authenticated downloads, replacement and retention handling, a purge command, PostgreSQL integration coverage, and responsive guest/reception interfaces.
 
 ## M3 — Service catalog and request operations
 

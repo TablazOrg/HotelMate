@@ -12,32 +12,38 @@ import (
 // from the environment so local, container, and hosted deployments share the
 // same application binary.
 type Config struct {
-	Environment     string
-	HTTPAddr        string
-	APIVersion      string
-	DatabaseURL     string
-	JWTSecret       string
-	JWTIssuer       string
-	StaffTokenTTL   time.Duration
-	GuestTokenTTL   time.Duration
-	OnboardingToken string
-	AllowedOrigins  []string
-	AutoMigrate     bool
+	Environment       string
+	HTTPAddr          string
+	APIVersion        string
+	DatabaseURL       string
+	JWTSecret         string
+	JWTIssuer         string
+	StaffTokenTTL     time.Duration
+	GuestTokenTTL     time.Duration
+	OnboardingToken   string
+	UploadsDir        string
+	DocumentMaxBytes  int64
+	DocumentRetention time.Duration
+	AllowedOrigins    []string
+	AutoMigrate       bool
 }
 
 func Load() Config {
 	return Config{
-		Environment:     envOrDefault("APP_ENV", "development"),
-		HTTPAddr:        envOrDefault("API_HTTP_ADDR", ":8080"),
-		APIVersion:      envOrDefault("API_VERSION", "0.1.0"),
-		DatabaseURL:     envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
-		JWTSecret:       envOrDefault("JWT_SECRET", "replace-this-development-secret-now"),
-		JWTIssuer:       envOrDefault("JWT_ISSUER", "hotelmate-api"),
-		StaffTokenTTL:   durationEnv("STAFF_TOKEN_TTL", 8*time.Hour),
-		GuestTokenTTL:   durationEnv("GUEST_TOKEN_TTL", 24*time.Hour),
-		OnboardingToken: envOrDefault("ONBOARDING_TOKEN", "replace-this-onboarding-token"),
-		AllowedOrigins:  csvEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
-		AutoMigrate:     boolEnv("AUTO_MIGRATE", true),
+		Environment:       envOrDefault("APP_ENV", "development"),
+		HTTPAddr:          envOrDefault("API_HTTP_ADDR", ":8080"),
+		APIVersion:        envOrDefault("API_VERSION", "0.3.0"),
+		DatabaseURL:       envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
+		JWTSecret:         envOrDefault("JWT_SECRET", "replace-this-development-secret-now"),
+		JWTIssuer:         envOrDefault("JWT_ISSUER", "hotelmate-api"),
+		StaffTokenTTL:     durationEnv("STAFF_TOKEN_TTL", 8*time.Hour),
+		GuestTokenTTL:     durationEnv("GUEST_TOKEN_TTL", 24*time.Hour),
+		OnboardingToken:   envOrDefault("ONBOARDING_TOKEN", "replace-this-onboarding-token"),
+		UploadsDir:        envOrDefault("UPLOADS_DIR", "uploads"),
+		DocumentMaxBytes:  int64Env("DOCUMENT_MAX_BYTES", 5*1024*1024),
+		DocumentRetention: durationEnv("DOCUMENT_RETENTION", 720*time.Hour),
+		AllowedOrigins:    csvEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
+		AutoMigrate:       boolEnv("AUTO_MIGRATE", true),
 	}
 }
 
@@ -50,6 +56,9 @@ func (c Config) Validate() error {
 	}
 	if c.StaffTokenTTL <= 0 || c.GuestTokenTTL <= 0 {
 		return fmt.Errorf("token TTL values must be positive")
+	}
+	if strings.TrimSpace(c.UploadsDir) == "" || c.DocumentMaxBytes < 1024 || c.DocumentRetention <= 0 {
+		return fmt.Errorf("document storage configuration is invalid")
 	}
 	if c.Environment == "production" {
 		if strings.HasPrefix(c.JWTSecret, "replace-") {
@@ -105,6 +114,18 @@ func durationEnv(key string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	parsed, err := time.ParseDuration(value)
+	if err != nil || parsed <= 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func int64Env(key string, fallback int64) int64 {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback
+	}
+	parsed, err := strconv.ParseInt(value, 10, 64)
 	if err != nil || parsed <= 0 {
 		return fallback
 	}

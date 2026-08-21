@@ -2,7 +2,7 @@
 
 HotelMate connects hotel guests with reception and hotel operations: pre-arrival check-in, service requests, upsells, facilities, restaurant content, and AI-assisted conversations.
 
-The current delivery includes the infrastructure baseline and Milestone 1 identity/access slice: hotel onboarding and branding, separate guest/staff JWT sessions, tenant-scoped staff roles, audit events, and responsive RTL login/admin flows. Later product modules remain tracked in the milestone plan.
+The current delivery includes Milestones 0–2: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, pre-arrival guest login, and private online check-in documents. Reception can create and confirm reservations, check guests in and out, and review documents from the responsive RTL operations UI. Later product modules remain tracked in the milestone plan.
 
 ## Stack
 
@@ -44,6 +44,8 @@ The seed is disabled in production and prints its local demo credentials.
 3. Install and run the web app: `cd frontend && npm install && npm run dev`.
 
 Useful commands are available in the root `Makefile`. When `AUTO_MIGRATE=true`, the API applies reviewed GORM schema steps through the `hotelmate_schema_migrations` ledger.
+
+Online check-in files are stored in the private `uploads` volume, never under the web root. Run `make purge-documents` regularly; production scheduling is documented in the deployment guide.
 
 ## Guides
 

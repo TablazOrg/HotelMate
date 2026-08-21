@@ -54,21 +54,40 @@ func Migrate(db *gorm.DB) error {
 		return fmt.Errorf("create migration ledger: %w", err)
 	}
 
-	const version = "2026082101_identity_tenancy"
-	var count int64
-	if err := db.Model(&schemaMigration{}).Where("version = ?", version).Count(&count).Error; err != nil {
-		return fmt.Errorf("read migration ledger: %w", err)
-	}
-	if count > 0 {
-		return nil
+	migrations := []struct {
+		version string
+		apply   func(*gorm.DB) error
+	}{
+		{version: "2026082101_identity_tenancy", apply: migrateIdentityTenancy},
+		{version: "2026082102_reservation_lifecycle", apply: migrateReservationLifecycle},
 	}
 
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := migrateIdentityTenancy(tx); err != nil {
+	for _, migration := range migrations {
+		var count int64
+		if err := db.Model(&schemaMigration{}).Where("version = ?", migration.version).Count(&count).Error; err != nil {
+			return fmt.Errorf("read migration ledger for %s: %w", migration.version, err)
+		}
+		if count > 0 {
+			continue
+		}
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := migration.apply(tx); err != nil {
+				return fmt.Errorf("apply migration %s: %w", migration.version, err)
+			}
+			return tx.Create(&schemaMigration{Version: migration.version, AppliedAt: time.Now().UTC()}).Error
+		}); err != nil {
 			return err
 		}
-		return tx.Create(&schemaMigration{Version: version, AppliedAt: time.Now().UTC()}).Error
-	})
+	}
+	return nil
+}
+
+func migrateReservationLifecycle(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&models.Reservation{},
+		&models.Stay{},
+		&models.OnlineCheckIn{},
+	)
 }
 
 func migrateIdentityTenancy(db *gorm.DB) error {

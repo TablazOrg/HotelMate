@@ -2,7 +2,7 @@
 
 ## What is currently available
 
-Milestone 0 and Milestone 1 are implemented: the Go/PostgreSQL/React runtime, hotel onboarding, separate staff and guest JWT sessions, tenant and role enforcement, public hotel branding, staff account management, and the RTL login/admin UI.
+Milestones 0–2 are implemented: the Go/PostgreSQL/React runtime, hotel onboarding, separate staff and guest JWT sessions, tenant and role enforcement, public hotel branding, staff account management, reservation/check-in/check-out operations, pre-arrival login and document upload, and the RTL guest/admin/reception UI.
 
 Service requests, reservations, real-time updates, content catalogs, and AI conversations are later milestones and are intentionally not represented as complete.
 

@@ -40,6 +40,9 @@ h1, h2, h3, p { margin-top: 0; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; margin-bottom: 42px; padding: 5px; border: 1px solid #dbe5e2; border-radius: 13px; background: #e9efed; }
 .auth-tabs button { padding: 11px; border: 0; border-radius: 9px; color: #65746f; background: transparent; font-size: .85rem; font-weight: 600; }
 .auth-tabs button.active { color: #173d37; background: #fff; box-shadow: 0 3px 10px rgba(37,65,59,.08); }
+.guest-access-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 4px; border-radius: 10px; background: #edf3f1; }
+.guest-access-tabs button { min-height: 38px; border: 0; border-radius: 7px; color: #677772; background: transparent; font-size: .75rem; font-weight: 700; }
+.guest-access-tabs button.active { color: var(--brand); background: #fff; box-shadow: 0 2px 8px rgba(37,65,59,.08); }
 .form-heading p, .section-heading p { margin-bottom: 7px; color: var(--brand); font-size: .75rem; font-weight: 700; }
 .form-heading h2 { margin-bottom: 28px; font-size: 1.8rem; letter-spacing: -.025em; }
 form { display: flex; flex-direction: column; gap: 17px; }
@@ -96,6 +99,71 @@ input[type=color] { padding: 5px; }
 .staff-list i.active { background: #32bb72; }
 .muted, .empty-panel p { color: #72817d; font-size: .82rem; }
 
+.checkin-layout { display: grid; grid-template-columns: .8fr 1.2fr; gap: 22px; }
+.privacy-card { display: flex; align-items: flex-start; gap: 14px; padding: 22px; border-radius: 14px; color: #24564e; background: color-mix(in srgb, var(--brand) 8%, #f7fbf9); }
+.privacy-icon { width: 32px; height: 32px; display: grid; place-items: center; flex: 0 0 auto; border-radius: 50%; color: #fff; background: var(--brand); font-weight: 800; }
+.privacy-card strong { font-size: .9rem; }
+.privacy-card p { margin: 7px 0 0; color: #627873; font-size: .75rem; line-height: 1.9; }
+.upload-form { gap: 10px; }
+.upload-form > small { color: #7a8884; font-size: .67rem; }
+.document-summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border: 1px solid #dfe8e5; border-radius: 10px; background: #f8faf9; }
+.document-summary div { display: flex; flex-direction: column; min-width: 0; }
+.document-summary strong { overflow: hidden; font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+.document-summary small, .document-summary > span { color: #75847f; font-size: .65rem; }
+
+.operations-panel { padding-bottom: 0; overflow: hidden; }
+.operations-heading { margin-bottom: 16px; }
+.operations-tabs { display: flex; gap: 8px; margin: 0 -28px; padding: 0 28px; border-bottom: 1px solid #e1e9e6; }
+.operations-tabs button { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border: 0; border-bottom: 2px solid transparent; color: #6d7c77; background: transparent; font-size: .78rem; font-weight: 700; }
+.operations-tabs button.active { border-bottom-color: var(--brand); color: var(--brand); }
+.operations-tabs span { min-width: 21px; height: 21px; display: grid; place-items: center; border-radius: 999px; color: #61706c; background: #eaf0ee; font-size: .62rem; }
+.operations-content { margin: 0 -28px; padding: 24px 28px 28px; background: #fbfcfc; }
+.subsection-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-bottom: 18px; }
+.subsection-bar > div { display: flex; flex-direction: column; gap: 4px; }
+.subsection-bar strong { font-size: .87rem; }
+.subsection-bar small { color: #76847f; font-size: .68rem; }
+.inline-form { display: grid; grid-template-columns: 1fr .65fr 1.2fr auto; align-items: end; gap: 10px; margin-bottom: 18px; padding: 16px; border: 1px solid #dce6e3; border-radius: 12px; background: #fff; }
+.inline-form .primary-button { min-width: 120px; margin: 0; }
+.room-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 11px; }
+.room-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px; border: 1px solid #dfe8e5; border-radius: 13px; background: #fff; }
+.room-card > div { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 6px; }
+.room-card > div small { color: #7a8984; font-size: .62rem; }
+.room-card > div strong { font-size: 1.25rem; }
+.room-card > div span { grid-column: 1 / -1; margin-top: 5px; color: #73827d; font-size: .67rem; }
+.status-select { gap: 3px; font-size: .62rem; }
+.status-select select { min-height: 35px; max-width: 130px; padding: 6px 8px; border-color: #dce5e2; font-size: .68rem; }
+.status-select.available select { color: #166534; background: #f0fdf4; }
+.status-select.occupied select { color: #9f1239; background: #fff1f2; }
+.status-select.cleaning select { color: #92400e; background: #fffbeb; }
+.status-select.out_of_service select { color: #4b5563; background: #f3f4f6; }
+.reservation-form { margin-bottom: 18px; padding: 18px; border: 1px solid #dce6e3; border-radius: 12px; background: #fff; }
+.reservation-list, .checkin-list { display: flex; flex-direction: column; gap: 9px; }
+.reservation-card { display: grid; grid-template-columns: 1.4fr 1fr auto; align-items: center; gap: 18px; padding: 15px 17px; border: 1px solid #dfe8e5; border-radius: 13px; background: #fff; }
+.reservation-main, .checkin-person { display: flex; align-items: center; gap: 11px; min-width: 0; }
+.reservation-main > div, .checkin-person > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.reservation-main strong, .checkin-person strong { font-size: .8rem; }
+.reservation-main small, .checkin-person small { overflow: hidden; color: #71817c; font-size: .66rem; text-overflow: ellipsis; white-space: nowrap; }
+.reservation-meta { display: grid; grid-template-columns: auto auto; align-items: center; justify-content: start; gap: 5px 12px; }
+.reservation-meta > strong { font-size: .7rem; }
+.reservation-meta code { grid-column: 1 / -1; direction: ltr; color: #52645f; font-size: .68rem; letter-spacing: .07em; }
+.reservation-action { justify-self: end; }
+.small-button.solid { border-color: var(--brand); color: #fff; background: var(--brand); }
+.status-pill { width: fit-content; display: inline-flex; align-items: center; padding: 5px 9px; border-radius: 999px; color: #52635e; background: #edf2f1; font-size: .62rem; font-weight: 700; white-space: nowrap; }
+.status-pill.pending, .status-pill.submitted { color: #92400e; background: #fffbeb; }
+.status-pill.confirmed, .status-pill.approved, .status-pill.active { color: #166534; background: #f0fdf4; }
+.status-pill.cancelled, .status-pill.rejected { color: #9f1239; background: #fff1f2; }
+.status-pill.completed { color: #475569; background: #f1f5f9; }
+.checkin-card { display: grid; grid-template-columns: 1fr .8fr 1.2fr; align-items: center; gap: 16px; padding: 16px; border: 1px solid #dfe8e5; border-radius: 13px; background: #fff; }
+.checkin-document { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; min-width: 0; }
+.link-button { max-width: 100%; overflow: hidden; padding: 0; border: 0; color: var(--brand); background: transparent; font-size: .68rem; text-decoration: underline; text-overflow: ellipsis; white-space: nowrap; }
+.review-controls { display: flex; align-items: center; gap: 8px; }
+.review-controls input { min-height: 38px; font-size: .7rem; }
+.review-controls > div { display: flex; gap: 5px; }
+.small-button.approve { color: #166534; border-color: #86efac; }
+.small-button.reject { color: #9f1239; border-color: #fda4af; }
+.review-note { grid-column: 3; margin: 0; color: #697873; font-size: .69rem; }
+.empty-state { grid-column: 1 / -1; padding: 34px; border: 1px dashed #cfdcd8; border-radius: 12px; color: #778681; text-align: center; font-size: .75rem; }
+
 @media (max-width: 900px) {
   .auth-page { grid-template-columns: 1fr; }
   .auth-aside { min-height: 300px; padding: 28px; }
@@ -104,6 +172,14 @@ input[type=color] { padding: 5px; }
   .api-indicator { display: none; }
   .auth-panel { padding: 40px 22px 60px; }
   .admin-grid { grid-template-columns: 1fr; }
+  .checkin-layout { grid-template-columns: 1fr; }
+  .room-grid { grid-template-columns: 1fr 1fr; }
+  .reservation-card { grid-template-columns: 1fr auto; }
+  .reservation-meta { justify-self: end; }
+  .reservation-action { grid-column: 1 / -1; justify-self: stretch; }
+  .reservation-action button { width: 100%; }
+  .checkin-card { grid-template-columns: 1fr 1fr; }
+  .review-controls, .review-note { grid-column: 1 / -1; }
 }
 
 @media (max-width: 620px) {
@@ -115,6 +191,17 @@ input[type=color] { padding: 5px; }
   .form-row { grid-template-columns: 1fr; }
   .section-block, .admin-panel, .empty-panel { padding: 20px; }
   .security-badge { align-self: flex-start; }
+  .operations-tabs { overflow-x: auto; margin: 0 -20px; padding: 0 20px; }
+  .operations-tabs button { flex: 0 0 auto; }
+  .operations-content { margin: 0 -20px; padding: 20px; }
+  .inline-form { grid-template-columns: 1fr; }
+  .room-grid { grid-template-columns: 1fr; }
+  .reservation-card, .checkin-card { grid-template-columns: 1fr; }
+  .reservation-meta { justify-self: start; }
+  .reservation-action, .review-controls, .review-note { grid-column: auto; }
+  .checkin-document { align-items: flex-start; }
+  .review-controls { align-items: stretch; flex-direction: column; }
+  .review-controls > div button { flex: 1; }
 }
 
 @media (max-width: 420px) {

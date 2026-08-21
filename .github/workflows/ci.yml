@@ -11,6 +11,22 @@ permissions:
 jobs:
   backend:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: hotelmate_test
+          POSTGRES_USER: hotelmate
+          POSTGRES_PASSWORD: hotelmate
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hotelmate -d hotelmate_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://hotelmate:hotelmate@localhost:5432/hotelmate_test?sslmode=disable
     defaults:
       run:
         working-directory: backend

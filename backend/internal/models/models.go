@@ -96,15 +96,19 @@ const (
 
 type Reservation struct {
 	BaseModel
-	HotelID          uuid.UUID         `gorm:"not null;index" json:"hotelId"`
+	HotelID          uuid.UUID         `gorm:"type:uuid;not null;index" json:"hotelId"`
 	Hotel            Hotel             `json:"-"`
 	GuestID          uuid.UUID         `gorm:"not null;index" json:"guestId"`
 	Guest            Guest             `json:"guest"`
 	RoomID           *uuid.UUID        `gorm:"index" json:"roomId"`
+	Room             *Room             `json:"room,omitempty"`
 	ConfirmationCode string            `gorm:"not null;uniqueIndex" json:"confirmationCode"`
 	Status           ReservationStatus `gorm:"size:24;not null;default:pending" json:"status"`
 	ArrivalDate      time.Time         `gorm:"not null" json:"arrivalDate"`
 	DepartureDate    time.Time         `gorm:"not null" json:"departureDate"`
+	ConfirmedAt      *time.Time        `json:"confirmedAt"`
+	CancelledAt      *time.Time        `json:"cancelledAt"`
+	Stay             *Stay             `gorm:"foreignKey:ReservationID" json:"stay,omitempty"`
 }
 
 type StayStatus string
@@ -117,16 +121,47 @@ const (
 
 type Stay struct {
 	BaseModel
-	HotelID       uuid.UUID  `gorm:"not null;index" json:"hotelId"`
-	Hotel         Hotel      `json:"-"`
-	GuestID       uuid.UUID  `gorm:"not null;index" json:"guestId"`
-	Guest         Guest      `json:"guest"`
-	RoomID        uuid.UUID  `gorm:"not null;index" json:"roomId"`
-	Room          Room       `json:"room"`
-	ReservationID *uuid.UUID `gorm:"index" json:"reservationId"`
-	Status        StayStatus `gorm:"size:24;not null;default:pre_arrival" json:"status"`
-	CheckInAt     *time.Time `json:"checkInAt"`
-	CheckOutAt    *time.Time `json:"checkOutAt"`
+	HotelID       uuid.UUID    `gorm:"not null;index" json:"hotelId"`
+	Hotel         Hotel        `json:"-"`
+	GuestID       uuid.UUID    `gorm:"not null;index" json:"guestId"`
+	Guest         Guest        `json:"guest"`
+	RoomID        uuid.UUID    `gorm:"not null;index" json:"roomId"`
+	Room          Room         `json:"room"`
+	ReservationID *uuid.UUID   `gorm:"index;uniqueIndex" json:"reservationId"`
+	Reservation   *Reservation `json:"reservation,omitempty"`
+	Status        StayStatus   `gorm:"size:24;not null;default:pre_arrival" json:"status"`
+	CheckInAt     *time.Time   `json:"checkInAt"`
+	CheckOutAt    *time.Time   `json:"checkOutAt"`
+}
+
+type OnlineCheckInStatus string
+
+const (
+	OnlineCheckInSubmitted OnlineCheckInStatus = "submitted"
+	OnlineCheckInApproved  OnlineCheckInStatus = "approved"
+	OnlineCheckInRejected  OnlineCheckInStatus = "rejected"
+)
+
+// OnlineCheckIn stores only private document metadata. The document bytes live
+// outside the web root and are available only through an authenticated staff
+// endpoint until the retention deadline is reached.
+type OnlineCheckIn struct {
+	BaseModel
+	HotelID            uuid.UUID           `gorm:"type:uuid;not null;index" json:"hotelId"`
+	StayID             uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex" json:"stayId"`
+	Stay               Stay                `json:"-"`
+	Status             OnlineCheckInStatus `gorm:"size:24;not null;default:submitted;index" json:"status"`
+	DocumentStorageKey string              `gorm:"not null;uniqueIndex" json:"-"`
+	DocumentName       string              `gorm:"size:180;not null" json:"documentName"`
+	DocumentMediaType  string              `gorm:"size:64;not null" json:"documentMediaType"`
+	DocumentSize       int64               `gorm:"not null" json:"documentSize"`
+	DocumentSHA256     string              `gorm:"size:64;not null" json:"-"`
+	SubmittedAt        time.Time           `gorm:"not null" json:"submittedAt"`
+	ReviewedAt         *time.Time          `json:"reviewedAt"`
+	ReviewedByID       *uuid.UUID          `gorm:"type:uuid;index" json:"reviewedById"`
+	ReviewNote         string              `gorm:"size:500" json:"reviewNote"`
+	RetentionUntil     time.Time           `gorm:"not null;index" json:"retentionUntil"`
+	DocumentDeletedAt  *time.Time          `gorm:"index" json:"documentDeletedAt"`
 }
 
 type ServiceCategory string

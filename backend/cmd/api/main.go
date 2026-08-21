@@ -13,6 +13,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/config"
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
+	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/httpapi"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 )
@@ -52,12 +53,18 @@ func main() {
 		os.Exit(1)
 	}
 	repository := store.New(db)
+	documentStorage, err := documents.NewLocalStorage(cfg.UploadsDir, cfg.DocumentMaxBytes)
+	if err != nil {
+		logger.Error("initialize document storage", "error", err)
+		os.Exit(1)
+	}
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewHandler(httpapi.Dependencies{
-			DB: db, Store: repository, Tokens: tokens, Version: cfg.APIVersion,
+			DB: db, Store: repository, Lifecycle: repository, Documents: documentStorage, Tokens: tokens, Version: cfg.APIVersion,
 			AllowedOrigins: cfg.AllowedOrigins, OnboardingToken: cfg.OnboardingToken, Logger: logger,
+			DocumentMaxBytes: cfg.DocumentMaxBytes, DocumentRetention: cfg.DocumentRetention,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

@@ -12,31 +12,40 @@ import (
 	"time"
 
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
+	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 	"gorm.io/gorm"
 )
 
 type Dependencies struct {
-	DB              *gorm.DB
-	Store           store.Store
-	Tokens          *auth.TokenManager
-	Version         string
-	AllowedOrigins  []string
-	OnboardingToken string
-	Logger          *slog.Logger
+	DB                *gorm.DB
+	Store             store.Store
+	Lifecycle         store.LifecycleStore
+	Documents         documents.Storage
+	Tokens            *auth.TokenManager
+	Version           string
+	AllowedOrigins    []string
+	OnboardingToken   string
+	Logger            *slog.Logger
+	DocumentMaxBytes  int64
+	DocumentRetention time.Duration
 }
 
 type Server struct {
-	db              *gorm.DB
-	store           store.Store
-	tokens          *auth.TokenManager
-	version         string
-	onboardingToken string
-	logger          *slog.Logger
-	dummyHash       string
-	authLimiter     *ipRateLimiter
-	onboardLimiter  *ipRateLimiter
+	db                *gorm.DB
+	store             store.Store
+	lifecycle         store.LifecycleStore
+	documents         documents.Storage
+	tokens            *auth.TokenManager
+	version           string
+	onboardingToken   string
+	logger            *slog.Logger
+	dummyHash         string
+	authLimiter       *ipRateLimiter
+	onboardLimiter    *ipRateLimiter
+	documentMaxBytes  int64
+	documentRetention time.Duration
 }
 
 func NewHandler(deps Dependencies) http.Handler {
@@ -46,15 +55,19 @@ func NewHandler(deps Dependencies) http.Handler {
 	}
 	dummyHash, _ := auth.HashPassword("hotelmate-dummy-password")
 	s := &Server{
-		db:              deps.DB,
-		store:           deps.Store,
-		tokens:          deps.Tokens,
-		version:         deps.Version,
-		onboardingToken: deps.OnboardingToken,
-		logger:          logger,
-		dummyHash:       dummyHash,
-		authLimiter:     newIPRateLimiter(20, 5*time.Minute),
-		onboardLimiter:  newIPRateLimiter(5, 10*time.Minute),
+		db:                deps.DB,
+		store:             deps.Store,
+		lifecycle:         deps.Lifecycle,
+		documents:         deps.Documents,
+		tokens:            deps.Tokens,
+		version:           deps.Version,
+		onboardingToken:   deps.OnboardingToken,
+		logger:            logger,
+		dummyHash:         dummyHash,
+		authLimiter:       newIPRateLimiter(20, 5*time.Minute),
+		onboardLimiter:    newIPRateLimiter(5, 10*time.Minute),
+		documentMaxBytes:  deps.DocumentMaxBytes,
+		documentRetention: deps.DocumentRetention,
 	}
 
 	mux := http.NewServeMux()
@@ -65,11 +78,13 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/onboarding/hotels", s.limit(s.onboardLimiter, http.HandlerFunc(s.onboardHotel)))
 	mux.Handle("POST /api/v1/auth/staff/login", s.limit(s.authLimiter, http.HandlerFunc(s.staffLogin)))
 	mux.Handle("POST /api/v1/auth/guest/login", s.limit(s.authLimiter, http.HandlerFunc(s.guestLogin)))
+	mux.Handle("POST /api/v1/auth/guest/reservation", s.limit(s.authLimiter, http.HandlerFunc(s.reservationLogin)))
 	mux.Handle("GET /api/v1/staff/me", s.require(auth.ActorStaff)(http.HandlerFunc(s.staffMe)))
 	mux.Handle("GET /api/v1/guest/me", s.require(auth.ActorGuest)(http.HandlerFunc(s.guestMe)))
 	mux.Handle("GET /api/v1/staff/users", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.listStaff)))
 	mux.Handle("POST /api/v1/staff/users", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.createStaff)))
 	mux.Handle("PATCH /api/v1/staff/hotel", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.updateHotelBranding)))
+	s.registerLifecycleRoutes(mux)
 
 	return withRecovery(logger, withRequestLog(logger, withSecurityHeaders(withCORS(deps.AllowedOrigins, mux))))
 }

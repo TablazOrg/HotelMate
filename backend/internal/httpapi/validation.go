@@ -35,3 +35,30 @@ func validRole(role models.StaffRole) bool {
 		return false
 	}
 }
+
+func validRoomStatus(status models.RoomStatus) bool {
+	switch status {
+	case models.RoomStatusAvailable, models.RoomStatusCleaning, models.RoomStatusOutOfSvc:
+		return true
+	default:
+		return false
+	}
+}
+
+func validReservationStatus(status models.ReservationStatus) bool {
+	switch status {
+	case "", models.ReservationPending, models.ReservationConfirmed, models.ReservationCancelled, models.ReservationCompleted:
+		return true
+	default:
+		return false
+	}
+}
+
+func validOnlineCheckInStatus(status models.OnlineCheckInStatus) bool {
+	switch status {
+	case "", models.OnlineCheckInSubmitted, models.OnlineCheckInApproved, models.OnlineCheckInRejected:
+		return true
+	default:
+		return false
+	}
+}
