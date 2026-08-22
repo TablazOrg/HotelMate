@@ -30,4 +30,4 @@ M7 requires external commercial, legal, recovery, access, and ownership choices 
 
 ## Consequences
 
-M7 implementation can be built, tested, and deployed locally now. A real staging/production deployment, successful off-host transfer, restore RPO/RTO measurement, tested paging route, DNS/TLS renewal, and provider rebuild evidence remain acceptance blockers until this ADR is approved and credentials/resources are available.
+M7 implementation can be built, tested, deployed, rolled back, and restored locally now. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are evidence of the implementation rather than approved production objectives. A real staging/production deployment, successful encrypted off-host transfer, scheduled provider-backed drill against approved RPO/RTO, tested paging route, DNS/TLS renewal, and provider rebuild/drift evidence remain acceptance blockers until this ADR is approved and credentials/resources are available.

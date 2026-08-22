@@ -1,0 +1,9 @@
+misconfigurations:
+  - id: AVD-DS-0002
+    paths:
+      - frontend/Dockerfile
+      - frontend/Dockerfile.production
+    expired_at: 2027-02-23
+    statement: >-
+      The official Nginx image keeps a root master only to bind ports 80/443
+      and load the mounted TLS private key; request workers run as nginx.

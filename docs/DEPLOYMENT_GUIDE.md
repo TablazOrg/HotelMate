@@ -17,10 +17,12 @@ cd infra/ansible
 ansible-galaxy collection install -r requirements.yml
 ansible-playbook -i inventory.yml playbook.yml --ask-vault-pass \
   -e hotelmate_cli_artifact=/absolute/path/hotelmate-linux-amd64 \
-  -e hotelmate_cosign_artifact=/absolute/path/cosign-linux-amd64
+  -e hotelmate_cli_sha256=<trusted-release-sha256> \
+  -e hotelmate_cosign_artifact=/absolute/path/cosign-linux-amd64 \
+  -e hotelmate_cosign_sha256=<trusted-cosign-sha256>
 ```
 
-The playbook creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic tooling, protected runtime directories/config, and systemd backup/privacy-retention timers. Production intentionally refuses to configure while the alert receiver is unapproved.
+The playbook verifies both controller-side artifacts before transfer, then creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic tooling, Docker JSON-log rotation, certbot renewal, protected runtime directories/config, and systemd backup/privacy-retention timers. The optional monthly recovery-drill timer remains disabled until a dedicated Vault-protected non-production environment is supplied. Production intentionally refuses to configure while the alert receiver is unapproved.
 
 Copy reviewed runtime files to `/srv/hotelmate`, including production and observability Compose files, `ops/observability`, and the frontend Nginx template as packaged by the release process. `docker-compose.production.yml` requires `HOTELMATE_API_IMAGE` and `HOTELMATE_WEB_IMAGE`; the CLI writes them from the release manifest into a mode-`600` managed file.
 
@@ -28,7 +30,7 @@ Copy reviewed runtime files to `/srv/hotelmate`, including production and observ
 
 Create `staging` and `production` environments. Require the approved production reviewers and prevent self-review where policy requires it. Configure:
 
-- Environment secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, pinned `DEPLOY_KNOWN_HOSTS`, smoke credentials, and the staging-only acceptance onboarding token.
+- Environment secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, pinned `DEPLOY_KNOWN_HOSTS`, all three authenticated-smoke values, and the staging-only acceptance onboarding token.
 - Environment variables: `DEPLOY_PATH`, `CONFIG_FILE`, and `BASE_URL`.
 - Package permission for GHCR and branch protection requiring every CI job.
 
@@ -57,7 +59,7 @@ ACCEPTANCE_ONBOARDING_TOKEN='<staging-only-token>' \
   hotelmate --base-url https://staging.example.com acceptance
 ```
 
-Production runs public and dedicated-account authenticated smoke. The acceptance suite covers onboarding defaults, RBAC/tenant isolation, reservation/stay lifecycle, paid ordering, private documents, AI handoff, fulfillment, reporting/audits, checkout, and expired-session rejection.
+Production runs public and dedicated-account authenticated smoke. The acceptance suite is implemented in Go and covers onboarding defaults, RBAC/tenant isolation, reservation/stay lifecycle, paid ordering, private documents, AI handoff, fulfillment, reporting/audits, checkout, and expired-session rejection; `scripts/acceptance.sh` is only a compatibility launcher.
 
 ## 5. Rollback
 
@@ -81,7 +83,7 @@ docker compose --env-file /etc/hotelmate/production.env \
 
 Prometheus, Grafana, and Alertmanager bind to loopback for SSH tunnel/VPN access. Validate every rule in staging. The API remains one replica because realtime fanout is process-local.
 
-Systemd runs a daily recovery set and daily document/message purges. Confirm with `systemctl list-timers 'hotelmate-*'`, inspect each unit result, and verify Prometheus job-freshness metrics. Document/message retention settings remain explicit in the protected environment.
+Systemd runs a daily recovery set and daily document/message purges. When explicitly approved, it also runs the monthly isolated recovery drill. Confirm with `systemctl list-timers 'hotelmate-*'`, inspect each unit result, and verify last-run/last-success/failure metrics plus backup and drill ages. Document/message retention and drill objectives remain explicit in protected environments.
 
 ## 7. Operational acceptance
 

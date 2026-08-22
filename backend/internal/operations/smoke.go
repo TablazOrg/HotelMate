@@ -8,10 +8,10 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/TablazOrg/HotelMate/backend/internal/acceptance"
 )
 
 func (a *App) smoke(ctx context.Context, config resolvedConfig) (any, error) {
@@ -130,17 +130,17 @@ func statusMessage(ok bool) string {
 }
 
 func (a *App) acceptance(ctx context.Context, config resolvedConfig) (any, error) {
-	script := filepath.Join(a.WorkingDir, "scripts", "acceptance.sh")
-	if _, err := os.Stat(script); err != nil {
-		return nil, failure(ExitPrecondition, "acceptance runner is unavailable", err)
+	result, err := acceptance.Run(ctx, acceptance.Options{
+		BaseURL: config.BaseURL, OnboardingToken: config.lookup("ACCEPTANCE_ONBOARDING_TOKEN"), Now: a.Now,
+	})
+	data := map[string]any{"baseURL": config.BaseURL}
+	if result.HotelSlug != "" {
+		data["hotelSlug"] = result.HotelSlug
+		data["otherHotelSlug"] = result.OtherHotelSlug
 	}
-	var stdout, stderr bytes.Buffer
-	if err := a.Executor.Run(ctx, script, []string{config.BaseURL}, nil, nil, &stdout, &stderr); err != nil {
-		message := strings.TrimSpace(stderr.String())
-		if message == "" {
-			message = err.Error()
-		}
-		return map[string]any{"baseURL": config.BaseURL}, failure(ExitVerification, "acceptance verification failed", fmt.Errorf("%s", message))
+	if err != nil {
+		return data, failure(ExitVerification, "acceptance verification failed", err)
 	}
-	return map[string]any{"baseURL": config.BaseURL, "result": strings.TrimSpace(stdout.String())}, nil
+	data["result"] = result.Summary()
+	return data, nil
 }

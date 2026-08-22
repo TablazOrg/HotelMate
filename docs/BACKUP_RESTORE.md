@@ -7,28 +7,38 @@ HotelMate treats PostgreSQL plus the approved private-upload scope as one `hotel
 Use the protected environment whose `DATABASE_URL`, backup directory, restic repository/password, and retention are already approved:
 
 ```bash
-hotelmate --config /etc/hotelmate/production.env backup create --json
+hotelmate --config /etc/hotelmate/production.env backup create --yes --json
 hotelmate --config /etc/hotelmate/production.env backup list
 hotelmate --config /etc/hotelmate/production.env \
   --manifest /srv/hotelmate-private/backups/hotelmate-<timestamp>.json backup verify
 ```
 
-Creation uses restrictive file/directory modes. It rejects an empty/truncated dump, recomputes SHA-256, and validates the PostgreSQL custom-format catalog. When the upload directory contains documents, they are archived without symlinks and included in the same manifest. Restic encrypts before off-host transfer and prunes to the configured daily/weekly policy; production deploy preflight requires that destination.
+Creation uses restrictive file/directory modes. It rejects an empty/truncated dump, recomputes SHA-256, and validates the PostgreSQL custom-format catalog. Manifest parsing permits exactly one JSON document and base-name-only artifact references, preventing traversal outside the catalog. When the upload directory contains documents, they are archived without symlinks and the restore rejects archive traversal. Restic encrypts before off-host transfer, must return a snapshot ID, and prunes only the matching HotelMate/environment snapshots to the configured daily/weekly policy; production deploy preflight requires that destination.
 
 The systemd timer runs daily. Alert when the last successful backup is older than 26 hours, verification/transfer/retention fails, or disk capacity falls below policy. Ensure at least one repository is outside the runtime host/account failure domain.
 
 ## Isolated restore drill
 
-Never point a rehearsal at production. Create an isolated PostgreSQL database, upload path, application environment, and domain. Select a recovery manifest that satisfies the requested point, then:
+Never point a rehearsal at production. Create an isolated PostgreSQL database, upload path, application environment, and domain. Set `HOTELMATE_ISOLATED_RECOVERY_DRILL=true` only in that protected configuration. The automated command selects the latest set at or before the requested point:
+
+```bash
+hotelmate --config /etc/hotelmate/recovery-drill.env \
+  --requested-recovery-point 2026-08-23T00:00:00Z \
+  --operator scheduled-drill backup drill --yes --json
+```
+
+It executes and records the following sequence:
 
 1. Record drill start, source recovery timestamp, requested recovery point, release, operator, and expected RPO/RTO.
 2. Fetch the restic snapshot into a mode-restricted staging directory when the local catalog copy is unavailable.
-3. Run `hotelmate --config <isolated-env> --manifest <manifest> backup verify`.
-4. Run `hotelmate --config <isolated-env> --manifest <manifest> backup restore --yes`.
+3. Run checksum/catalog verification for the selected manifest.
+4. Run the guarded restore into the configured isolated target.
 5. The upload restore preserves an existing target as `.pre-restore-<timestamp>` before activating restored files; retain or remove that copy under the approved sensitive-data policy.
-6. Run `hotelmate --config <isolated-env> migrate status`, then `migrate up --yes` when pending.
-7. Deploy the manifest's matching release, run public/authenticated smoke, and run the stateful acceptance suite including tenant isolation and private-document access.
-8. Record finish time, actual RPO/RTO, checks, gaps, and evidence path. Securely expire drill data.
+6. Apply and verify the migration ledger.
+7. Run public/authenticated smoke and the native stateful acceptance suite, including tenant isolation and private-document access, against the already isolated matching application release.
+8. Record finish time, actual RPO/RTO, checks, gaps, and evidence under `HOTELMATE_EVIDENCE_DIR`; update the restore-drill metric and securely expire drill data.
+
+The optional systemd timer runs monthly only when `hotelmate_recovery_drill_enabled` is approved and a Vault-protected `hotelmate_recovery_drill_env` is supplied. A production `APP_ENV` target is rejected before artifact access.
 
 If logical dumps cannot meet the approved RPO, do not weaken the target: add PostgreSQL physical backup/WAL archiving and extend the manifest/drill contract.
 

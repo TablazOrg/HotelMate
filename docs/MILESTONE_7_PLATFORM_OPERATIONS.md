@@ -6,25 +6,46 @@ M7 turns the current single-host release baseline into a reproducible operating 
 
 The target remains intentionally provider-neutral until the discovery decisions below are approved. Kubernetes and multi-region failover are not default requirements; they should be introduced only when availability, traffic, or organizational constraints justify their cost.
 
-## Implementation status — platform foundation delivered, external rollout pending
+## Implementation status — provider-neutral platform delivered, external rollout pending
 
-As of 2026-08-22, the repository contains the M7 provider-neutral foundation:
+As of 2026-08-23, the repository contains the M7 provider-neutral foundation:
 
-- A tested Go `hotelmate` CLI with protected config-file precedence, secret redaction, `hotelmate.operations/v1` JSON, stable exit codes, migration status/dry-run, recovery-set catalog/verification/restore, guarded retention, deploy preflight/apply/status/rollback, locks, evidence, automatic application rollback, smoke/acceptance, and build identity.
-- Digest-only staging/production Compose, a build-once GitHub release pipeline, pinned Actions, dependency/secret/license/IaC and container gates, provenance, SPDX SBOMs, keyless signatures/attestations, staging acceptance, and protected-environment production promotion of the same digest.
-- Coordinated PostgreSQL/private-upload `hotelmate.recovery-set/v1` manifests, SHA-256 and PostgreSQL catalog verification, optional encrypted restic off-host transfer/retention, systemd schedules, freshness metrics, and an isolated-restore procedure.
-- An Ansible Ubuntu host baseline for non-root/key-only access, firewalling, automatic security patches, Docker/PostgreSQL/restic tooling, protected configuration, job timers, and rebuildable host setup.
-- Prometheus application metrics, PostgreSQL/host/container/external probes, Loki/Alloy central logs, Grafana provisioning, and alert rules for availability, errors, latency, TLS, storage, restarts, log delivery, and backup/privacy-job freshness.
+- A tested Go `hotelmate` CLI with protected configuration precedence, secret redaction, `hotelmate.operations/v1` JSON, stable exit codes, mandatory confirmation for every mutation, signal-aware ownership locks, job metrics, migrations, recovery sets and drills, guarded retention, deploy/rollback evidence, authenticated smoke, a native Go acceptance suite, and release identity.
+- Digest-pinned production Compose plus pinned GitHub workflows that build once, scan API/web images, generate SBOMs and provenance, sign and verify images/attestations, deploy staging, and promote the same manifest through the protected production environment. CI also syntax-checks Ansible and validates production/observability configuration.
+- Coordinated PostgreSQL/private-upload `hotelmate.recovery-set/v1` manifests with strict parsing, path safety, SHA-256 and PostgreSQL catalog verification, encrypted restic off-host transfer/retention, daily schedules, job-freshness metrics, and an automated isolated `hotelmate.recovery-drill/v1` workflow.
+- A provider-neutral Ubuntu/Ansible baseline for non-root deployment, key-only SSH, firewalling, unattended security updates, Docker log rotation, certificate renewal, protected directories, timers, and checksummed CLI/cosign installation.
+- Prometheus application/release metrics, `pg_stat_statements`, PostgreSQL/host/container/external probes, Loki/Alloy request-ID correlation, a provisioned Grafana dashboard, and alerts for availability, errors, latency, authentication, WebSockets, operations, TLS, capacity, database behavior, backups, purges, and restore-drill age.
 
-Local Go/frontend checks, Compose validation, CLI smoke, a real PostgreSQL dump/catalog verification, the M0–M6 product acceptance suite, and the M7 operational checks are executable in this workspace. M7 remains **in progress**, not complete: [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved, no external staging/production host or GitHub environment credentials are present, the restic destination and paging receiver are unconfigured, and no public DNS/TLS, promotion, off-host restore drill, alert test, or measured RPO/RTO evidence can yet exist.
+M7 remains **in progress**, not complete. [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved; no external provider, domain, staging/production hosts, protected GitHub environments, registry credentials, restic destination, secrets manager, or paging receiver were supplied. Consequently the repository cannot truthfully produce public DNS/TLS, signed registry publication, protected promotion, encrypted off-host durability, provider rebuild/drift, or routed-alert evidence.
 
 ### Local verification evidence
 
-The 2026-08-22 development exercise built `hotelmate-api:dev` and `hotelmate-web:dev`, passed deploy preflight, applied the release through the CLI, and recorded successful smoke evidence. The complete stateful acceptance suite passed. A recovery set produced an 89,955-byte PostgreSQL custom dump with 160 catalog entries; it restored into the separately named `hotelmate_m7_restore_20260822` database, reported all six migrations applied, and was removed after the drill. The database restore operation took one second locally. A rollback exercise changed the running API from image ID `45b367…` to the distinct baseline `e25ec5…`, passed smoke, and redeployed `45b367…` with another successful evidence record. The final dependency-upgraded local deployment runs image ID `03ce427…` and passed the same acceptance and metrics checks.
+The sanitized evidence record is [M7 local validation — 2026-08-23](evidence/M7_LOCAL_VALIDATION_20260823.md). In summary:
 
-These values prove the local command paths and guards; they are not production RPO/RTO, public availability, off-host durability, or provider rebuild evidence.
+- The current `hotelmate-api:dev` and `hotelmate-web:dev` release was applied through `hotelmate deploy apply --yes`; public and authenticated smoke passed, and the API reports `0.7.0-local`, commit `working-tree`, and image `hotelmate-api:dev` through its private metrics endpoint.
+- The native Go stateful acceptance suite passed through the Nginx edge and exercised onboarding, RBAC, tenant isolation, reservation/stay lifecycle, paid ordering, private documents, AI handoff, fulfillment, reporting/audits, and checkout.
+- Recovery set `hotelmate-20260822T203931Z` contains a 125,940-byte PostgreSQL custom dump and a 989-byte private-upload archive. Both hashes matched, `pg_restore` reported 162 catalog entries, and all seven migrations were present.
+- An isolated non-production drill restored that set into a dedicated database and upload path, ran migrations, authenticated smoke, tenant isolation, private-document checks, and the complete acceptance suite, then removed the temporary API container and database. It measured local RPO at 268 seconds and local RTO at 4 seconds.
+- A distinct-image application rollback and redeploy passed previously through the same CLI evidence path.
 
-## Current-state discovery
+These values prove the local command paths, validation, recovery selection, and safety guards. They are not approved production RPO/RTO targets, public availability, encrypted off-host durability, or provider rebuild evidence.
+
+### Requirement and acceptance evidence matrix
+
+| M7 capability | Repository evidence | Current status |
+| --- | --- | --- |
+| Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script compatibility aliases, unit/failure-path tests | Implemented and locally proven |
+| CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented; external registry publication and branch/environment enforcement pending |
+| Delivery and rollback | Digest policy, preflight, owner locks, migrations, checkpoint, activation, authenticated smoke, automatic/application rollback, timestamped evidence | Locally proven; staging/production promotion pending |
+| Backup and restore | Strict coordinated manifests, checksums, PostgreSQL catalog checks, upload path safety, restic encryption/retention, metrics/timers | Local recovery set proven; approved off-host repository and immutability pending |
+| Recovery rehearsal | Isolated-target guard, point-in-time set selection, restore, migrations, smoke, native acceptance, RPO/RTO evidence, monthly timer | Local drill passed; scheduled provider-backed drill and approved objectives pending |
+| Host baseline | Versioned Ansible, firewall, key-only user, updates, log rotation, certbot timer, protected directories, checksum verification | Implemented and syntax-checked; clean provider-host rebuild/drift evidence pending |
+| Observability | Private Prometheus/Grafana/Alertmanager/Loki/Alloy profile, release/request-ID/database/job signals, dashboard, alert rules | Implemented and statically validated; real retention, paging route, and alert exercises pending |
+| Owner governance | ADR, deployment/recovery/incident runbooks, explicit external acceptance gates | Documented; owner decisions, roles, approvals, access review, and exercises pending |
+
+## Pre-M7 discovery baseline
+
+This table records the gaps that drove the milestone. The implementation/evidence matrix above is the current state.
 
 | Area | Existing baseline | Gap to close in M7 |
 | --- | --- | --- |
@@ -64,7 +85,7 @@ Create a Go CLI at `backend/cmd/hotelmate` and move shared operational behavior 
 hotelmate doctor
 hotelmate config validate [--environment staging|production]
 hotelmate migrate status|up [--dry-run]
-hotelmate backup create|list|verify|restore
+hotelmate backup create|list|verify|restore|drill
 hotelmate retention purge-documents|purge-messages
 hotelmate deploy preflight|apply|status|rollback
 hotelmate smoke
@@ -75,11 +96,11 @@ hotelmate version
 Requirements:
 
 - Flags override environment variables, which override an optional mode-restricted config file; resolved secrets are never printed.
-- Mutating or destructive commands identify the target environment and require an explicit confirmation or CI-safe confirmation flag.
+- Every mutating or destructive command identifies the target environment and requires `--yes`, including development, so automation and humans share one safety contract.
 - `--json` emits a versioned schema, stdout contains results, stderr contains diagnostics, and exit codes distinguish invalid configuration, failed preconditions, command failure, and verification failure.
 - `doctor` checks required tools, target connectivity, DNS, TLS, Compose/registry access, disk headroom, database readiness, and backup destination access without changing state.
 - CLI unit tests cover parsing and redaction; integration tests cover migrations, backup verification, restore guards, smoke checks, and failure exit codes.
-- Existing Make targets remain thin developer aliases that call the CLI, preventing two independent operational implementations.
+- Existing Make targets and compatibility scripts remain thin aliases that call the CLI, preventing two independent operational implementations.
 
 ### M7.2 — CI and software supply chain
 

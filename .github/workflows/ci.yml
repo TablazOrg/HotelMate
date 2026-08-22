@@ -90,6 +90,7 @@ jobs:
           scanners: vuln,secret,misconfig,license
           severity: HIGH,CRITICAL
           ignore-unfixed: true
+          trivyignores: .trivyignore.yaml
           exit-code: '1'
           cache: 'false'
 
@@ -124,10 +125,12 @@ jobs:
         run: docker compose -f docker-compose.production.yml -f docker-compose.observability.yml config --quiet
       - name: Validate Prometheus configuration and alert rules
         run: |
-          docker run --rm -v "$PWD/ops/observability:/etc/prometheus:ro" prom/prometheus:v3.5.0 promtool check config /etc/prometheus/prometheus.yml
-          docker run --rm -v "$PWD/ops/observability:/etc/prometheus:ro" prom/prometheus:v3.5.0 promtool check rules /etc/prometheus/alerts.yml
+          docker run --rm --entrypoint /bin/promtool -v "$PWD/ops/observability:/etc/prometheus:ro" prom/prometheus:v3.5.0 check config /etc/prometheus/prometheus.yml
+          docker run --rm --entrypoint /bin/promtool -v "$PWD/ops/observability:/etc/prometheus:ro" prom/prometheus:v3.5.0 check rules /etc/prometheus/alerts.yml
       - name: Validate Alertmanager configuration
-        run: docker run --rm -v "$PWD/ops/observability:/etc/hotelmate:ro" prom/alertmanager:v0.28.1 amtool check-config /etc/hotelmate/alertmanager.yml
+        run: docker run --rm --entrypoint /bin/amtool -v "$PWD/ops/observability:/etc/hotelmate:ro" prom/alertmanager:v0.28.1 check-config /etc/hotelmate/alertmanager.yml
+      - name: Validate Alloy log pipeline
+        run: docker run --rm -v "$PWD/ops/observability:/etc/alloy:ro" grafana/alloy:v1.10.0 validate /etc/alloy/config.alloy
 
   containers:
     runs-on: ubuntu-latest

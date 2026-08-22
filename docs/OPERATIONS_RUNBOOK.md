@@ -25,7 +25,7 @@ Failed activation or smoke automatically attempts this application-only rollback
 
 ## Restore and disaster recovery
 
-Follow [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Always restore a drill into an isolated database and private-upload path. Record source recovery timestamp, requested point, release, schema ledger, checksum/catalog verification, restore duration, actual RPO/RTO, tenant-isolation acceptance, and operator.
+Follow [BACKUP_RESTORE.md](BACKUP_RESTORE.md). Always restore a drill into an isolated database, private-upload path, and application target. `hotelmate backup drill --yes` refuses production and requires the explicit isolated-drill flag; it records source/requested timestamps, release, schema ledger, checksum/catalog verification, restore duration, actual RPO/RTO, authenticated smoke, tenant-isolation acceptance, and operator. Enable the monthly timer only after its dedicated protected environment and objectives are approved.
 
 For complete host loss, provision the approved provider resource, run the Ansible playbook, restore the protected config from the secrets manager, initialize TLS/DNS, restore the selected recovery set, deploy its matching release manifest, and run smoke plus acceptance before moving traffic.
 
@@ -40,7 +40,7 @@ For database corruption or accidental deletion, freeze writes, preserve forensic
 
 ## Monitoring and alerts
 
-The private observability profile supplies Prometheus, Grafana, Alertmanager, Loki with Alloy Docker-log collection, node/container/PostgreSQL exporters, an external TLS probe, a provisioned platform dashboard, and rules for availability, readiness, 5xx rate, latency, certificate expiry, backup/purge freshness, disk/inodes, restarts, PostgreSQL telemetry, and log-pipeline availability. Prometheus/Grafana/Alertmanager bind to loopback only; Loki is reachable only on the Compose network.
+The private observability profile supplies Prometheus, Grafana, Alertmanager, Loki with Alloy Docker-log collection, node/container/PostgreSQL exporters, an external TLS probe, a provisioned platform dashboard, and rules for availability, readiness, 5xx rate, latency, authentication failures, WebSocket failures, release identity, operation failures, certificate expiry, backup/purge/drill freshness, CPU/memory/disk/inodes/private-volume capacity, restarts, PostgreSQL connections/query latency/storage, and log-pipeline availability. `pg_stat_statements` and I/O timing support query telemetry. Edge and API logs retain request ID as structured metadata rather than a high-cardinality label. Prometheus/Grafana/Alertmanager bind to loopback only; Loki is reachable only on the Compose network.
 
 Before enabling an environment:
 

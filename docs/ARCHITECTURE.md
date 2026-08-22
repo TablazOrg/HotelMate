@@ -17,6 +17,7 @@ The product workflows, roles, and domain entities remain those in the definition
 backend/
   cmd/api/              process entrypoint and graceful shutdown
   cmd/hotelmate/        versioned operations CLI
+  internal/acceptance/  native stateful release acceptance suite
   internal/config/      environment-backed configuration
   internal/database/    GORM connection and migrations
   internal/documents/   private local document-storage adapter
@@ -27,7 +28,7 @@ backend/
   internal/observability/ Prometheus application metrics
   internal/realtime/    tenant/stay/department-scoped event fanout
   internal/store/       tenant-scoped GORM persistence
-scripts/                guarded backup, restore, and release smoke checks
+scripts/                thin compatibility launchers for CLI operations
 infra/ansible/          versioned host hardening and rebuild configuration
 ops/                    systemd schedules, monitoring rules, and dashboards
 .github/workflows/      CI plus signed immutable release/promotion automation
@@ -58,8 +59,8 @@ The concierge provider is an interface boundary. The shipped provider performs d
 
 Operational reports are calculated in the API from tenant-scoped request history, completion timestamps, snapshotted IRR totals, active stays, conversations, knowledge moderation state, and failed audit events. Report ranges are bounded to 31 hotel-local calendar days. The React reporting and security views reuse the supplied handoff's admin shell, card geometry, spacing, typography, RTL direction, and tenant color tokens; the browser never derives authoritative revenue totals.
 
-Every HTTP request receives a validated or generated `X-Request-ID`. The same value is returned to the client, attached to structured request logs, and persisted on mutation/security audit records. Layered in-process limits cover all API traffic, mutation traffic, authentication, and onboarding. The API and Nginx add CSP, Permissions Policy, framing, MIME-sniffing, referrer, cross-origin resource, and production HSTS controls. `/metrics` exposes bounded route-pattern request counts/duration, readiness, build identity, uptime, and active WebSockets to the private Prometheus network; Nginx does not publish that endpoint. The operations profile adds external TLS, PostgreSQL, host, container, backup, purge, disk, certificate, and restart monitoring plus 30-day Loki retention fed by Alloy's Docker discovery.
+Every HTTP request receives a validated or generated `X-Request-ID`. The same value is returned to the client, attached to API and Nginx JSON logs, persisted on mutation/security audit records, and retained by Alloy as Loki structured metadata rather than a cardinality-heavy label. Layered in-process limits cover all API traffic, mutation traffic, authentication, and onboarding. The API and Nginx add CSP, Permissions Policy, framing, MIME-sniffing, referrer, cross-origin resource, and production HSTS controls. `/metrics` exposes bounded route-pattern request counts/duration, readiness, release version/commit/image, uptime, and active WebSockets to the private Prometheus network; Nginx does not publish that endpoint. The operations profile adds external TLS, PostgreSQL `pg_stat_statements`, host, container, operation, backup, purge, recovery-drill, capacity, certificate, and restart monitoring plus 30-day Loki retention fed by Alloy's Docker discovery.
 
-The `hotelmate` CLI is the sole release-operation contract. Staging/production images are digest-pinned, startup auto-migration is disabled, and the deployment command holds an environment lock while it verifies configuration/images, creates the production recovery checkpoint, runs additive migrations, activates images, checks the service, and records evidence. Application rollback changes images only; database repair/restore is always an explicit reviewed plan.
+The `hotelmate` CLI is the sole release-operation contract. All mutations require confirmation and deploy/migration/restore/drill operations share signal-aware, owner-token environment locks. Staging/production images are digest-pinned, startup auto-migration is disabled, and deployment verifies configuration/images, creates the production recovery checkpoint, runs additive migrations, activates images, checks the service, and records evidence. Recovery drills are restricted to explicitly marked non-production targets and combine point selection, verification, restore, migrations, authenticated smoke, native acceptance, and RPO/RTO evidence. Application rollback changes images only; database repair/restore is always an explicit reviewed plan.
 
 No external AI or payment provider is enabled by default.
