@@ -3,19 +3,41 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strings"
 
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
+	"github.com/google/uuid"
 )
 
 type contextKey string
 
 const (
-	claimsKey contextKey = "authClaims"
-	staffKey  contextKey = "authenticatedStaff"
-	stayKey   contextKey = "authenticatedStay"
+	claimsKey    contextKey = "authClaims"
+	staffKey     contextKey = "authenticatedStaff"
+	stayKey      contextKey = "authenticatedStay"
+	requestIDKey contextKey = "requestID"
 )
+
+var validRequestID = regexp.MustCompile(`^[A-Za-z0-9._-]{8,128}$`)
+
+func withRequestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		id := strings.TrimSpace(r.Header.Get("X-Request-ID"))
+		if !validRequestID.MatchString(id) {
+			id = uuid.NewString()
+		}
+		w.Header().Set("X-Request-ID", id)
+		ctx := context.WithValue(r.Context(), requestIDKey, id)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func requestID(r *http.Request) string {
+	id, _ := r.Context().Value(requestIDKey).(string)
+	return id
+}
 
 func (s *Server) require(actor auth.ActorType, roles ...models.StaffRole) func(http.Handler) http.Handler {
 	allowedRoles := make(map[models.StaffRole]struct{}, len(roles))

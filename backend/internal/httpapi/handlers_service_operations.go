@@ -98,6 +98,9 @@ type serviceInput struct {
 	Currency         string                 `json:"currency"`
 	IsPaid           bool                   `json:"isPaid"`
 	IsQuickAction    bool                   `json:"isQuickAction"`
+	IsPreArrival     bool                   `json:"isPreArrival"`
+	AvailableFrom    string                 `json:"availableFrom"`
+	AvailableUntil   string                 `json:"availableUntil"`
 	SortOrder        int                    `json:"sortOrder"`
 	IsActive         bool                   `json:"isActive"`
 }
@@ -108,6 +111,8 @@ func (input *serviceInput) normalize() {
 	input.Description = strings.TrimSpace(input.Description)
 	input.Icon = strings.ToLower(strings.TrimSpace(input.Icon))
 	input.Currency = strings.ToUpper(strings.TrimSpace(input.Currency))
+	input.AvailableFrom = strings.TrimSpace(input.AvailableFrom)
+	input.AvailableUntil = strings.TrimSpace(input.AvailableUntil)
 }
 
 func (input serviceInput) valid() bool {
@@ -115,7 +120,7 @@ func (input serviceInput) valid() bool {
 		len(input.Description) <= 500 && validServiceCategory(input.Category) && validFulfillmentRole(input.FulfillmentRole) &&
 		len(input.Icon) >= 2 && len(input.Icon) <= 32 && input.EstimatedMinutes >= 1 && input.EstimatedMinutes <= 1440 &&
 		input.PriceCents >= 0 && input.PriceCents <= 100_000_000_000 && len(input.Currency) == 3 && input.SortOrder >= 0 && input.SortOrder <= 10000 &&
-		(input.IsPaid || input.PriceCents == 0)
+		(input.IsPaid || input.PriceCents == 0) && (!input.IsPreArrival || input.IsPaid) && validServiceWindow(input.AvailableFrom, input.AvailableUntil)
 }
 
 func (input serviceInput) model(hotelID uuid.UUID) models.Service {
@@ -124,7 +129,20 @@ func (input serviceInput) model(hotelID uuid.UUID) models.Service {
 		Category: input.Category, Icon: input.Icon, FulfillmentRole: input.FulfillmentRole,
 		EstimatedMinutes: input.EstimatedMinutes, PriceCents: input.PriceCents, Currency: input.Currency,
 		IsPaid: input.IsPaid, IsQuickAction: input.IsQuickAction, SortOrder: input.SortOrder, IsActive: input.IsActive,
+		IsPreArrival: input.IsPreArrival, AvailableFrom: input.AvailableFrom, AvailableUntil: input.AvailableUntil,
 	}
+}
+
+func validServiceWindow(from, until string) bool {
+	if from == "" && until == "" {
+		return true
+	}
+	if from == "" || until == "" {
+		return false
+	}
+	_, fromErr := time.Parse("15:04", from)
+	_, untilErr := time.Parse("15:04", until)
+	return fromErr == nil && untilErr == nil
 }
 
 func (s *Server) createService(w http.ResponseWriter, r *http.Request) {
@@ -498,6 +516,8 @@ func writeServiceOperationError(w http.ResponseWriter, err error) {
 		writeError(w, http.StatusConflict, "service_code_exists", "کد خدمت قبلاً استفاده شده است")
 	case errors.Is(err, store.ErrAssignmentRoleMismatch):
 		writeError(w, http.StatusConflict, "assignment_role_mismatch", "نقش حساب انتخاب‌شده با نوع خدمت سازگار نیست")
+	case errors.Is(err, store.ErrServiceUnavailable):
+		writeError(w, http.StatusConflict, "service_unavailable", "این سرویس در ساعت فعلی قابل سفارش نیست")
 	case errors.Is(err, store.ErrInvalidTransition):
 		writeError(w, http.StatusConflict, "invalid_transition", "تغییر وضعیت در شرایط فعلی مجاز نیست")
 	default:

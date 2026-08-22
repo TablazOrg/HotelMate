@@ -27,6 +27,7 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgres://hotelmate:hotelmate@localhost:5432/hotelmate_test?sslmode=disable
+      DATABASE_URL: postgres://hotelmate:hotelmate@localhost:5432/hotelmate_test?sslmode=disable
     defaults:
       run:
         working-directory: backend
@@ -36,6 +37,10 @@ jobs:
         with:
           go-version: '1.24.x'
           cache-dependency-path: backend/go.sum
+      - name: Rehearse migrations from a clean database
+        run: go run ./cmd/migrate
+      - name: Verify migrations are idempotent
+        run: go run ./cmd/migrate
       - run: go test ./...
       - run: go vet ./...
 

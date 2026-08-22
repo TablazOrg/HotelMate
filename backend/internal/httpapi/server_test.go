@@ -122,6 +122,7 @@ func testHandler(f *fakeStore, tokens *auth.TokenManager) http.Handler {
 
 func TestHealthHandler(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("X-Request-ID", "health-check-123")
 	res := httptest.NewRecorder()
 	NewHandler(Dependencies{Version: "test", AllowedOrigins: []string{"*"}}).ServeHTTP(res, req)
 	if res.Code != http.StatusOK {
@@ -129,6 +130,31 @@ func TestHealthHandler(t *testing.T) {
 	}
 	if got := res.Header().Get("X-Content-Type-Options"); got != "nosniff" {
 		t.Fatalf("missing security header: %q", got)
+	}
+	if got := res.Header().Get("Content-Security-Policy"); got == "" {
+		t.Fatal("missing content security policy")
+	}
+	if got := res.Header().Get("Permissions-Policy"); got == "" {
+		t.Fatal("missing permissions policy")
+	}
+	if got := res.Header().Get("Cross-Origin-Resource-Policy"); got != "same-site" {
+		t.Fatalf("missing cross-origin resource policy: %q", got)
+	}
+	if got := res.Header().Get("X-Request-ID"); got != "health-check-123" {
+		t.Fatalf("valid request id was not preserved: %q", got)
+	}
+}
+
+func TestInvalidRequestIDIsReplacedAndProductionHSTSIsSet(t *testing.T) {
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("X-Request-ID", "invalid request id")
+	res := httptest.NewRecorder()
+	NewHandler(Dependencies{Version: "test", EnableHSTS: true}).ServeHTTP(res, req)
+	if got := res.Header().Get("X-Request-ID"); !validRequestID.MatchString(got) || got == "invalid request id" {
+		t.Fatalf("invalid request id was not replaced: %q", got)
+	}
+	if got := res.Header().Get("Strict-Transport-Security"); got == "" {
+		t.Fatal("missing production HSTS header")
 	}
 }
 
@@ -175,6 +201,9 @@ func TestStaffLoginAndTenantBoundSession(t *testing.T) {
 	}
 	if len(fake.audits) == 0 || fake.audits[0].Outcome != models.AuditOutcomeSuccess {
 		t.Fatal("successful login was not audited")
+	}
+	if fake.audits[0].RequestID == "" || fake.audits[0].RequestID != loginRes.Header().Get("X-Request-ID") {
+		t.Fatalf("audit request id mismatch: %+v", fake.audits[0])
 	}
 }
 

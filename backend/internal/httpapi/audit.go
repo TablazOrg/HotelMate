@@ -20,10 +20,10 @@ func (s *Server) audit(r *http.Request, hotelID, actorID *uuid.UUID, actorType, 
 	}
 	entry := &models.AuditLog{
 		HotelID: hotelID, ActorID: actorID, ActorType: actorType, Action: action,
-		Outcome: outcome, IPAddress: clientIP(r), Metadata: encoded,
+		Outcome: outcome, IPAddress: clientIP(r), RequestID: requestID(r), Metadata: encoded,
 	}
 	if err := s.store.WriteAudit(r.Context(), entry); err != nil {
-		s.logger.Error("write audit log", "action", action, "error", err)
+		s.logger.Error("write audit log", "requestId", requestID(r), "action", action, "error", err)
 	}
 }
 

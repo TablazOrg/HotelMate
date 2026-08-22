@@ -37,6 +37,7 @@ Verify:
 ```bash
 curl -fsS https://<domain>/healthz
 curl -fsS https://<domain>/readyz
+./scripts/smoke.sh https://<domain>
 ```
 
 ## 4. Create the first hotel
@@ -47,7 +48,7 @@ Call `POST /api/v1/onboarding/hotels` once with the `X-Onboarding-Token` header.
 
 Before an update, take a PostgreSQL backup and retain the currently deployed Git commit/image. Then pull the reviewed commit, build, and run `up -d`. The application records applied schema versions in `hotelmate_schema_migrations`.
 
-M1 through M3 use additive migrations. M3 adds and backfills tenant-safe service codes, derives `service_requests.hotel_id` from each stay, converts the legacy assignment column to UUID, creates persisted request events, and seeds missing core services per hotel. An M0 development volume may still contain the obsolete plaintext `guests.identity_number` column and global staff email constraint. Do not remove either automatically on a database that may contain data; inspect and migrate that volume explicitly first.
+M1 through M6 use additive migrations. M3 adds and backfills tenant-safe service codes, derives `service_requests.hotel_id` from each stay, converts the legacy assignment column to UUID, creates persisted request events, and seeds missing core services per hotel. M4 adds paid/pre-arrival service metadata and hotel content fields, then seeds missing revenue services and starter content per hotel. M5 adds conversation read/assignment/retention state plus versioned knowledge moderation and seeds six approved starter topics for hotels without knowledge. M6 adds request correlation to the audit schema through `2026082206_reporting_hardening`. Run `/app/migrate` twice in staging before deployment to rehearse and prove idempotence. An M0 development volume may still contain the obsolete plaintext `guests.identity_number` column and global staff email constraint. Do not remove either automatically on a database that may contain data; inspect and migrate that volume explicitly first.
 
 ## 6. WebSocket delivery
 
@@ -67,6 +68,16 @@ Schedule the purge command at least daily from the deployment directory. For exa
 
 Run `make purge-documents` for the local Compose stack. The command deletes only documents whose stored retention deadline has passed and then marks their metadata deleted. Monitor failures; do not expose or manually sweep the volume as a substitute for this workflow.
 
-## 8. Backups
+## 8. Backups and restore rehearsal
 
-At minimum, schedule encrypted `pg_dump` backups outside the Docker volume and test restoration regularly. Upload files remain on a Docker volume until the object-storage milestone is delivered. If policy requires those files to be recoverable, encrypt and access-control the volume backup and expire backup copies in line with the document retention policy.
+Run `./scripts/backup.sh /absolute/private/backup/path` from the deployment directory. It writes a PostgreSQL custom-format dump with mode-restrictive defaults plus a SHA-256 checksum. Store the output on encrypted storage outside the Docker host/volume and schedule it with the operator's job runner. The private document adapter remains backed by the `uploads-production` volume on a single VPS; if policy requires document recovery, separately encrypt and access-control that volume backup and expire copies in line with document retention.
+
+Restoration replaces matching database objects and therefore requires the explicit `--confirm` argument. Stop the API, verify the target environment and checksum, run the guarded restore script, start the API, and execute the smoke checks. The exact drill is in `docs/BACKUP_RESTORE.md`. Test it in an isolated environment at least quarterly and before a major schema rollout.
+
+## 9. Conversation privacy and retention
+
+Set `CHAT_RETENTION` to the approved privacy period and `CHAT_CONFIDENCE_THRESHOLD` between 0 and 1. The default is 90 days and 0.5. Schedule `/app/purge-messages` at least daily, using the same Compose pattern as the document purge. This command performs a hard delete of expired message bodies; monitor its exit status. Keep the bundled deterministic provider unless an external provider has completed a separate data-protection, prompt-safety, and credential review.
+
+## 10. Security and observability
+
+Keep `ENABLE_HSTS=true` only behind working HTTPS. Nginx and the API emit the release security headers. All API responses include `X-Request-ID`; use it to correlate browser errors, structured API logs, and administrator audit entries. The in-memory API limits are a single-replica safeguard. Add an edge/shared rate limiter before horizontal scaling. Alert on readiness failures, repeated HTTP 5xx responses, failed purge/backup jobs, and increases in failed security events.

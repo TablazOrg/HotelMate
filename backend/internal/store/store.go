@@ -44,8 +44,30 @@ func (s *GORMStore) CreateHotelWithPrimaryAdmin(ctx context.Context, onboarding 
 			return err
 		}
 		onboarding.PrimaryAdmin.Hotel = onboarding.Hotel
-		services := models.CoreServices(onboarding.Hotel.ID)
-		return tx.Create(&services).Error
+		services := append(models.CoreServices(onboarding.Hotel.ID), models.RevenueServices(onboarding.Hotel.ID)...)
+		if err := tx.Create(&services).Error; err != nil {
+			return err
+		}
+		facilities := models.DefaultFacilities(onboarding.Hotel.ID)
+		if err := tx.Create(&facilities).Error; err != nil {
+			return err
+		}
+		promotion := models.DefaultPromotion(onboarding.Hotel.ID, time.Now().UTC())
+		if err := tx.Create(&promotion).Error; err != nil {
+			return err
+		}
+		restaurant, items := models.DefaultRestaurant(onboarding.Hotel.ID)
+		if err := tx.Create(&restaurant).Error; err != nil {
+			return err
+		}
+		for index := range items {
+			items[index].RestaurantID = restaurant.ID
+		}
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+		knowledge := models.DefaultKnowledge(onboarding.Hotel.ID, time.Now().UTC())
+		return tx.Create(&knowledge).Error
 	})
 }
 

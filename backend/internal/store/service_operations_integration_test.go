@@ -39,13 +39,16 @@ func TestServiceRequestOperationsPostgres(t *testing.T) {
 	}
 	hotel, admin = onboarding.Hotel, onboarding.PrimaryAdmin
 	services, err := repository.ListGuestServices(ctx, hotel.ID)
-	if err != nil || len(services) != 6 {
-		t.Fatalf("expected six core services, got %d: %v", len(services), err)
+	if err != nil || len(services) != 12 {
+		t.Fatalf("expected six core and six revenue services, got %d: %v", len(services), err)
 	}
-	var housekeepingService models.Service
+	var housekeepingService, preArrivalService models.Service
 	for _, service := range services {
 		if service.Code == "room-cleaning" {
 			housekeepingService = service
+		}
+		if service.Code == "prearrival-transfer" {
+			preArrivalService = service
 		}
 	}
 	if housekeepingService.ID == uuid.Nil || !housekeepingService.IsQuickAction {
@@ -65,8 +68,28 @@ func TestServiceRequestOperationsPostgres(t *testing.T) {
 		t.Fatalf("create active stay: %v", err)
 	}
 	stay.Guest, stay.Room, stay.Hotel = guest, room, hotel
+	preGuest := models.Guest{HotelID: hotel.ID, FirstName: "Pre", LastName: suffix, IdentityType: "passport", IdentityNumberHash: "unused-test-hash"}
+	preRoom := models.Room{HotelID: hotel.ID, Number: "P-" + suffix, Floor: 4, Type: "Suite", Status: models.RoomStatusAvailable}
+	if err := db.Create(&preGuest).Error; err != nil {
+		t.Fatalf("create pre-arrival guest: %v", err)
+	}
+	if err := db.Create(&preRoom).Error; err != nil {
+		t.Fatalf("create pre-arrival room: %v", err)
+	}
+	preStay := models.Stay{HotelID: hotel.ID, GuestID: preGuest.ID, RoomID: preRoom.ID, Status: models.StayPreArrival}
+	if err := db.Create(&preStay).Error; err != nil {
+		t.Fatalf("create pre-arrival stay: %v", err)
+	}
+	preStay.Guest, preStay.Room, preStay.Hotel = preGuest, preRoom, hotel
 
 	now := time.Now().UTC().Truncate(time.Millisecond)
+	preRequest, err := repository.CreateServiceRequest(ctx, preStay, preArrivalService.ID, 1, "پرواز صبح", now)
+	if err != nil || preRequest.TotalPriceCents != preArrivalService.PriceCents {
+		t.Fatalf("create paid pre-arrival order: %+v err=%v", preRequest, err)
+	}
+	if _, err := repository.CreateServiceRequest(ctx, preStay, housekeepingService.ID, 1, "", now); !errors.Is(err, store.ErrInvalidTransition) {
+		t.Fatalf("free active-stay service must be rejected before arrival, got %v", err)
+	}
 	request, err := repository.CreateServiceRequest(ctx, stay, housekeepingService.ID, 2, "بعد از ساعت ۱۰", now)
 	if err != nil {
 		t.Fatalf("create request: %v", err)

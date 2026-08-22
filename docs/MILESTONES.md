@@ -37,26 +37,32 @@ Delivered with an atomic reservation → pre-arrival → active → checked-out 
 
 Delivered with six seeded quick actions, tenant-scoped catalog administration, active-stay guest ordering/cancellation, assignment-role validation, priority and status controls, immutable event history, department queues, tenant/stay/department-filtered WebSocket delivery, API tests, and PostgreSQL upgrade verification. The React delivery now includes the approved handoff-based Persian RTL guest home/catalog/live tracking experience, one-tap requests, mobile fulfillment queues, an actionable realtime operations dashboard, catalog activation/creation controls, and responsive tenant branding. Paid ordering and AI surfaces remain explicitly gated to M4 and M5.
 
-## M4 — Revenue and hotel content
+## M4 — Revenue and hotel content (complete)
 
 - Implement paid services and pre-arrival upsell flows with prices/currency and order totals.
 - Add facilities, promotions, restaurants, and menu management plus guest browsing views.
 - Add availability windows, activation controls, and tenant-scoped content administration.
 - Keep payment provider integration behind a feature boundary; Zarinpal remains intentionally deferred per the definition.
 
-## M5 — Conversations and AI knowledge
+Delivered with six tenant-seeded revenue services, paid request totals, pre-arrival-only upsells, hotel-timezone availability windows, and pay-at-hotel checkout. Public and authenticated content APIs now cover facilities, promotions, restaurants, and menus with tenant-scoped administration and activation controls. The handoff-based React experience includes public hotel discovery, live guest paid ordering, real pre-arrival orders, and an administrator content workspace. Payment-provider capture remains deliberately outside the boundary.
+
+## M5 — Conversations and AI knowledge (complete)
 
 - Implement guest conversations, staff handoff, unread/read state, and message history.
 - Add AI provider abstraction with confidence threshold and deterministic handoff to reception when confidence is low.
 - Deliver knowledge item authoring, review, approve/reject workflow, and versioned publication.
 - Add safety, prompt-injection, privacy, and retention controls before enabling production AI traffic.
 
-## M6 — Reporting, hardening, and deployment
+Delivered with one stay-scoped conversation per guest, persisted guest/AI/staff/system messages, read cursors and derived unread counts, reception assignment/close flows, and tenant/stay-filtered live chat events. The default provider is deterministic and receives approved tenant knowledge only; low-confidence questions and prompt-injection markers produce the handoff state and exact handoff copy from the design. Direct identifier patterns are redacted before persistence, messages expire under a configurable retention window with a hard-delete purge command, and no guest text is sent to an external model. Versioned knowledge submissions retain prior publication until a new version is approved. The React guest bubbles, handoff state, reception inbox, and moderation cards follow the supplied high-fidelity handoff.
+
+## M6 — Reporting, hardening, and deployment (complete)
 
 - Add operational and revenue reporting based on request/reservation history.
 - Add audit trails, rate limiting, security headers, backups, migrations in CI, and observability.
 - Move file storage behind an object-storage interface; local disk remains the development adapter.
 - Add production Nginx TLS configuration, deployment runbooks, and end-to-end smoke tests.
+
+Delivered with tenant- and role-scoped operational/revenue reports, hotel-timezone date ranges, server-authoritative IRR totals, active-room and reception-handoff metrics, paginated audit administration, correlation IDs in responses/logs/audits, layered API and mutation rate limits, API and Nginx security headers, an additive reporting-hardening migration, repeatable migration rehearsal in CI, guarded PostgreSQL backup/restore scripts, TLS deployment guidance, and public plus authenticated smoke checks. The existing private document storage was already isolated behind `documents.Storage`; local volume storage remains the development/single-VPS adapter. The reporting and security UI extends the supplied handoff's RTL admin system rather than introducing a separate visual language.
 
 ## Definition of done for each milestone
 

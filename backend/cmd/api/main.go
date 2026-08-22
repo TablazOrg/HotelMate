@@ -64,10 +64,12 @@ func main() {
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
 		Handler: httpapi.NewHandler(httpapi.Dependencies{
-			DB: db, Store: repository, Lifecycle: repository, ServiceOperations: repository,
+			DB: db, Store: repository, Lifecycle: repository, ServiceOperations: repository, Content: repository, Conversations: repository, Reporting: repository,
 			Documents: documentStorage, Realtime: realtimeHub, Tokens: tokens, Version: cfg.APIVersion,
 			AllowedOrigins: cfg.AllowedOrigins, OnboardingToken: cfg.OnboardingToken, Logger: logger,
 			DocumentMaxBytes: cfg.DocumentMaxBytes, DocumentRetention: cfg.DocumentRetention,
+			ChatRetention: cfg.ChatRetention, ChatConfidence: cfg.ChatConfidence,
+			EnableHSTS: cfg.EnableHSTS,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,

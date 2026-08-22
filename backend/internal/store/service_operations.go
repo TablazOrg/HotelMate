@@ -14,6 +14,7 @@ import (
 
 var (
 	ErrServiceCodeExists      = errors.New("service code already exists")
+	ErrServiceUnavailable     = errors.New("service is outside its availability window")
 	ErrAssignmentRoleMismatch = errors.New("staff role cannot fulfill this service")
 )
 
@@ -91,6 +92,7 @@ func (s *GORMStore) UpdateService(ctx context.Context, hotelID, serviceID uuid.U
 			"category": input.Category, "icon": input.Icon, "fulfillment_role": input.FulfillmentRole,
 			"estimated_minutes": input.EstimatedMinutes, "price_cents": input.PriceCents,
 			"currency": input.Currency, "is_paid": input.IsPaid, "is_quick_action": input.IsQuickAction,
+			"is_pre_arrival": input.IsPreArrival, "available_from": input.AvailableFrom, "available_until": input.AvailableUntil,
 			"sort_order": input.SortOrder, "is_active": input.IsActive,
 		}
 		return tx.Model(&service).Updates(updates).Error
@@ -111,12 +113,24 @@ func (s *GORMStore) CreateServiceRequest(ctx context.Context, stay models.Stay, 
 		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("hotel_id = ? AND id = ? AND guest_id = ?", stay.HotelID, stay.ID, stay.GuestID).First(&lockedStay).Error; err != nil {
 			return err
 		}
-		if lockedStay.Status != models.StayActive {
+		if lockedStay.Status != models.StayActive && lockedStay.Status != models.StayPreArrival {
 			return ErrInvalidTransition
 		}
 		var service models.Service
 		if err := tx.Where("hotel_id = ? AND id = ? AND is_active = ?", stay.HotelID, serviceID, true).First(&service).Error; err != nil {
 			return err
+		}
+		if lockedStay.Status == models.StayPreArrival && (!service.IsPaid || !service.IsPreArrival) {
+			return ErrInvalidTransition
+		}
+		if service.AvailableFrom != "" || service.AvailableUntil != "" {
+			var hotel models.Hotel
+			if err := tx.Where("id = ?", stay.HotelID).First(&hotel).Error; err != nil {
+				return err
+			}
+			if !serviceAvailableAt(service, hotel.Timezone, at) {
+				return ErrServiceUnavailable
+			}
 		}
 		request = models.ServiceRequest{
 			HotelID: stay.HotelID, StayID: stay.ID, ServiceID: service.ID, Status: models.RequestNew,
@@ -136,6 +150,29 @@ func (s *GORMStore) CreateServiceRequest(ctx context.Context, stay models.Stay, 
 		return models.ServiceRequest{}, err
 	}
 	return s.loadServiceRequest(ctx, stay.HotelID, request.ID)
+}
+
+func serviceAvailableAt(service models.Service, timezone string, at time.Time) bool {
+	if service.AvailableFrom == "" && service.AvailableUntil == "" {
+		return true
+	}
+	from, fromErr := time.Parse("15:04", service.AvailableFrom)
+	until, untilErr := time.Parse("15:04", service.AvailableUntil)
+	if fromErr != nil || untilErr != nil {
+		return false
+	}
+	location, err := time.LoadLocation(timezone)
+	if err != nil {
+		location = time.UTC
+	}
+	local := at.In(location)
+	nowMinutes := local.Hour()*60 + local.Minute()
+	fromMinutes := from.Hour()*60 + from.Minute()
+	untilMinutes := until.Hour()*60 + until.Minute()
+	if fromMinutes <= untilMinutes {
+		return nowMinutes >= fromMinutes && nowMinutes <= untilMinutes
+	}
+	return nowMinutes >= fromMinutes || nowMinutes <= untilMinutes
 }
 
 func (s *GORMStore) ListGuestRequests(ctx context.Context, hotelID, stayID uuid.UUID) ([]models.ServiceRequest, error) {

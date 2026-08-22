@@ -9,7 +9,7 @@ The attached `PROJECT_DEFINITION.md` describes the product and originally lists 
 - **Database:** PostgreSQL 16.
 - **Local orchestration:** Docker Compose with Postgres, API, and an Nginx-served web build.
 
-The product workflows, roles, and domain entities remain those in the definition. The repository now contains the infrastructure baseline, complete M1 identity/access and M2 reservation/stay lifecycle slices, and the M3 service-operations backend/realtime foundation. M3 React screens are gated on the approved design handoff and are not finalized from inferred styling.
+The product workflows, roles, and domain entities remain those in the definition. The repository contains complete M0–M6 slices: infrastructure, identity/access, reservation/stay lifecycle, service operations and realtime delivery, paid/pre-arrival services, hotel content, approved-knowledge conversations, operational/revenue reporting, audit administration, deployment hardening, and the approved handoff-driven React flows.
 
 ## Repository layout
 
@@ -24,6 +24,7 @@ backend/
   internal/models/      domain model foundations
   internal/realtime/    tenant/stay/department-scoped event fanout
   internal/store/       tenant-scoped GORM persistence
+scripts/                guarded backup, restore, and release smoke checks
 frontend/
   src/                  React application shell (RTL/Farsi first)
 docs/
@@ -41,6 +42,16 @@ Online check-in document bytes live outside the web root behind the `documents.S
 
 Service requests are hotel- and stay-scoped, snapshot their calculated total, and append immutable creation, assignment, priority, status, and note events. The state machine permits `new → in_progress → completed`, with cancellation from open states. Housekeeping and F&B queues are forcibly constrained to their own categories; reception, operations, and administrators can see the hotel-wide queue.
 
+Paid services reuse the same request state machine and snapshot quantity × price in integer IRR. Active stays may order active services; pre-arrival stays are restricted to paid services explicitly marked for pre-arrival. Optional daily availability windows are evaluated in the hotel's configured IANA timezone and support overnight windows. Payment capture is behind a product boundary: the current UI records pay-at-hotel orders only.
+
+Facilities, promotions, restaurants, and menu items are hotel-owned content. Public reads return only currently active/available records, while authenticated staff reads include inactive records for editing. All writes derive the hotel from the staff JWT and are restricted to administrators and operations managers.
+
 The `/api/v1/events` WebSocket gateway authenticates the existing JWT through the negotiated subprotocol list. The in-process hub filters publications by hotel, guest stay, and staff department. Slow subscribers are skipped rather than blocking operations; clients recover from persisted REST history after reconnecting. The current hub supports a single API replica. Horizontal API scaling requires a shared pub/sub adapter before multiple replicas are enabled.
 
-External providers remain behind later milestone boundaries.
+The concierge provider is an interface boundary. The shipped provider performs deterministic matching over the latest approved knowledge version for the signed hotel; drafts and rejected answers never enter its context. Confidence below `CHAT_CONFIDENCE_THRESHOLD` and recognized prompt-injection markers bypass answer generation and permanently move the conversation to reception handoff. Common email and long-number identifiers are redacted before storage. Message reads exclude expired content, and `purge-messages` hard-deletes expired rows under `CHAT_RETENTION`.
+
+Operational reports are calculated in the API from tenant-scoped request history, completion timestamps, snapshotted IRR totals, active stays, conversations, knowledge moderation state, and failed audit events. Report ranges are bounded to 31 hotel-local calendar days. The React reporting and security views reuse the supplied handoff's admin shell, card geometry, spacing, typography, RTL direction, and tenant color tokens; the browser never derives authoritative revenue totals.
+
+Every HTTP request receives a validated or generated `X-Request-ID`. The same value is returned to the client, attached to structured request logs, and persisted on mutation/security audit records. Layered in-process limits cover all API traffic, mutation traffic, authentication, and onboarding. The API and Nginx add CSP, Permissions Policy, framing, MIME-sniffing, referrer, cross-origin resource, and production HSTS controls. Health and readiness probes, request status/duration logging, and the audit/reporting views provide the single-replica observability baseline.
+
+No external AI or payment provider is enabled by default.

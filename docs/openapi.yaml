@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: HotelMate API
-  version: 0.4.0
-  description: Tenant-aware identity, stay lifecycle, private online check-in, service catalog, operational request queues, and live request events delivered through Milestone 3.
+  version: 1.0.0
+  description: Production-ready tenant-aware hotel operations, revenue reporting, approved-knowledge conversations, security audit trails, and live events. Every HTTP response includes an X-Request-ID correlation header.
 servers:
   - url: /api/v1
 security: []
@@ -22,6 +22,18 @@ paths:
                 required: [hotel]
                 properties:
                   hotel: { $ref: '#/components/schemas/Hotel' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /public/hotels/{slug}/content:
+    get:
+      summary: Browse active public hotel content
+      parameters:
+        - $ref: '#/components/parameters/HotelSlug'
+      responses:
+        '200':
+          description: Active facilities, current promotions, restaurants, and available menu items
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HotelContent' }
         '404': { $ref: '#/components/responses/NotFound' }
   /onboarding/hotels:
     post:
@@ -530,7 +542,7 @@ paths:
                   requests: { type: array, items: { $ref: '#/components/schemas/ServiceRequest' } }
         '401': { $ref: '#/components/responses/Unauthorized' }
     post:
-      summary: Create a service request for an active stay
+      summary: Create a service request for an active stay or eligible pre-arrival upsell
       security: [{ guestBearer: [] }]
       requestBody:
         required: true
@@ -637,6 +649,195 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/content:
+    get:
+      summary: Read all tenant hotel content, including inactive records
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Tenant-scoped editable content
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HotelContent' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /staff/facilities:
+    post:
+      summary: Create a hotel facility
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityInput' }
+      responses:
+        '201':
+          description: Facility created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  facility: { $ref: '#/components/schemas/Facility' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/facilities/{id}:
+    patch:
+      summary: Replace editable facility fields
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FacilityInput' }
+      responses:
+        '200':
+          description: Facility updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  facility: { $ref: '#/components/schemas/Facility' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/promotions:
+    post:
+      summary: Create a promotion
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromotionInput' }
+      responses:
+        '201':
+          description: Promotion created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promotion: { $ref: '#/components/schemas/Promotion' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/promotions/{id}:
+    patch:
+      summary: Replace editable promotion fields
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PromotionInput' }
+      responses:
+        '200':
+          description: Promotion updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  promotion: { $ref: '#/components/schemas/Promotion' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/restaurants:
+    post:
+      summary: Create a restaurant
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RestaurantInput' }
+      responses:
+        '201':
+          description: Restaurant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restaurant: { $ref: '#/components/schemas/Restaurant' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/restaurants/{id}:
+    patch:
+      summary: Replace editable restaurant fields
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RestaurantInput' }
+      responses:
+        '200':
+          description: Restaurant updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  restaurant: { $ref: '#/components/schemas/Restaurant' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/restaurants/{id}/menu-items:
+    post:
+      summary: Add an item to a tenant restaurant menu
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MenuItemInput' }
+      responses:
+        '201':
+          description: Menu item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  menuItem: { $ref: '#/components/schemas/MenuItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/menu-items/{id}:
+    patch:
+      summary: Replace editable menu item fields
+      description: Restricted to hotel administrators and operations managers.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MenuItemInput' }
+      responses:
+        '200':
+          description: Menu item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  menuItem: { $ref: '#/components/schemas/MenuItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
   /staff/requests:
     get:
@@ -768,9 +969,264 @@ paths:
                   request: { $ref: '#/components/schemas/StaffServiceRequest' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+  /guest/conversation:
+    get:
+      summary: Read or start the current stay's conversation
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Conversation with non-expired message history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /guest/conversation/messages:
+    post:
+      summary: Send a guest message and receive an approved answer or deterministic handoff
+      description: Direct identifiers are redacted before persistence. Prompt-injection markers and answers below the configured confidence threshold bypass the provider and hand off to reception.
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationMessageInput' }
+      responses:
+        '201':
+          description: Conversation containing the guest message and any immediate assistant response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/conversation/read:
+    post:
+      summary: Mark assistant and reception messages read for the current stay
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Updated read state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+  /staff/conversations:
+    get:
+      summary: List the tenant reception inbox
+      description: Restricted to hotel administrators, operations managers, and reception.
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: status
+          schema: { $ref: '#/components/schemas/ConversationStatus' }
+      responses:
+        '200':
+          description: Last-message-ordered tenant conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations: { type: array, items: { $ref: '#/components/schemas/Conversation' } }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /staff/conversations/{id}:
+    get:
+      summary: Read a tenant conversation
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Conversation detail
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /staff/conversations/{id}/messages:
+    post:
+      summary: Reply to a conversation handed off to reception
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ConversationMessageInput' }
+      responses:
+        '201':
+          description: Conversation with the persisted staff response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/conversations/{id}/read:
+    post:
+      summary: Mark guest messages read by reception
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Updated read state
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+  /staff/conversations/{id}/close:
+    post:
+      summary: Close a reception conversation
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200':
+          description: Closed conversation with a system message
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversation: { $ref: '#/components/schemas/Conversation' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/knowledge:
+    get:
+      summary: List all tenant knowledge versions and moderation states
+      security: [{ staffBearer: [] }]
+      responses:
+        '200':
+          description: Pending versions first
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  knowledge: { type: array, items: { $ref: '#/components/schemas/KnowledgeItem' } }
+    post:
+      summary: Submit a new answer or version for review
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/KnowledgeInput' }
+      responses:
+        '201':
+          description: Pending knowledge version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  knowledgeItem: { $ref: '#/components/schemas/KnowledgeItem' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/knowledge/{id}/review:
+    post:
+      summary: Approve or reject a pending knowledge version
+      description: Restricted to primary and secondary hotel administrators. Rejection requires a note.
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status, note]
+              properties:
+                status: { type: string, enum: [approved, rejected] }
+                note: { type: string, maxLength: 500 }
+      responses:
+        '200':
+          description: Reviewed knowledge version
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  knowledgeItem: { $ref: '#/components/schemas/KnowledgeItem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/reports/operations:
+    get:
+      summary: Read tenant-scoped operational and revenue reporting
+      description: Available to hotel administrators and operations managers. Dates are interpreted in the configured hotel timezone and the inclusive range may not exceed 31 days.
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+      responses:
+        '200':
+          description: Server-calculated request, revenue, occupancy, handoff, and security metrics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [report]
+                properties:
+                  report: { $ref: '#/components/schemas/OperationalReport' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /staff/audit-logs:
+    get:
+      summary: Read the tenant security and mutation audit trail
+      description: Restricted to primary and secondary hotel administrators. Identity numbers, credentials, and message bodies are never included.
+      security: [{ staffBearer: [] }]
+      parameters:
+        - in: query
+          name: from
+          schema: { type: string, format: date }
+        - in: query
+          name: to
+          schema: { type: string, format: date }
+        - in: query
+          name: action
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: outcome
+          schema: { type: string, enum: [success, failure] }
+        - in: query
+          name: limit
+          schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+        - in: query
+          name: offset
+          schema: { type: integer, minimum: 0, default: 0 }
+      responses:
+        '200':
+          description: Reverse-chronological tenant audit page
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [audit]
+                properties:
+                  audit: { $ref: '#/components/schemas/AuditPage' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '429': { $ref: '#/components/responses/RateLimited' }
   /events:
     get:
-      summary: Upgrade to the live request event WebSocket
+      summary: Upgrade to the live request and conversation event WebSocket
       description: Pass `hotelmate.events` and the existing JWT as the two Sec-WebSocket-Protocol values. Events are filtered by signed hotel, guest stay, and staff department. Persisted REST history is authoritative after reconnect.
       parameters:
         - in: header
@@ -938,7 +1394,7 @@ components:
       enum: [housekeeping, food_beverage, transport, wellness, other]
     Service:
       type: object
-      required: [id, code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, sortOrder, isActive]
+      required: [id, code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, isPreArrival, availableFrom, availableUntil, sortOrder, isActive]
       properties:
         id: { type: string, format: uuid }
         code: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$' }
@@ -952,11 +1408,14 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         isPaid: { type: boolean }
         isQuickAction: { type: boolean }
+        isPreArrival: { type: boolean, description: Allows this paid service to be ordered before hotel arrival. }
+        availableFrom: { type: string, pattern: '^(|([01][0-9]|2[0-3]):[0-5][0-9])$', description: Optional local hotel-timezone start time. }
+        availableUntil: { type: string, pattern: '^(|([01][0-9]|2[0-3]):[0-5][0-9])$', description: Optional local hotel-timezone end time; earlier values create an overnight window. }
         sortOrder: { type: integer, minimum: 0 }
         isActive: { type: boolean }
     ServiceInput:
       type: object
-      required: [code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, sortOrder, isActive]
+      required: [code, name, description, category, icon, fulfillmentRole, estimatedMinutes, priceCents, currency, isPaid, isQuickAction, isPreArrival, availableFrom, availableUntil, sortOrder, isActive]
       properties:
         code: { type: string, pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$', maxLength: 64 }
         name: { type: string, minLength: 2, maxLength: 120 }
@@ -969,8 +1428,105 @@ components:
         currency: { type: string, minLength: 3, maxLength: 3 }
         isPaid: { type: boolean }
         isQuickAction: { type: boolean }
+        isPreArrival: { type: boolean }
+        availableFrom: { type: string, pattern: '^(|([01][0-9]|2[0-3]):[0-5][0-9])$' }
+        availableUntil: { type: string, pattern: '^(|([01][0-9]|2[0-3]):[0-5][0-9])$' }
         sortOrder: { type: integer, minimum: 0, maximum: 10000 }
         isActive: { type: boolean }
+    Facility:
+      type: object
+      required: [id, name, description, icon, hours, sortOrder, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        icon: { type: string }
+        hours: { type: string }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+    FacilityInput:
+      type: object
+      required: [name, description, icon, hours, sortOrder, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        icon: { type: string, minLength: 2, maxLength: 32 }
+        hours: { type: string, maxLength: 120 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        isActive: { type: boolean }
+    Promotion:
+      type: object
+      required: [id, title, description, discountPct, badgeText, startsAt, endsAt, isActive]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        description: { type: string }
+        discountPct: { type: number, minimum: 0, maximum: 100 }
+        badgeText: { type: string }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        isActive: { type: boolean }
+    PromotionInput:
+      type: object
+      required: [title, description, discountPct, badgeText, startsAt, endsAt, isActive]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 140 }
+        description: { type: string, maxLength: 700 }
+        discountPct: { type: number, minimum: 0, maximum: 100 }
+        badgeText: { type: string, maxLength: 32 }
+        startsAt: { type: string, format: date-time }
+        endsAt: { type: string, format: date-time }
+        isActive: { type: boolean }
+    MenuItem:
+      type: object
+      required: [id, restaurantId, name, description, priceCents, currency, sortOrder, isAvailable]
+      properties:
+        id: { type: string, format: uuid }
+        restaurantId: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        priceCents: { type: integer, format: int64, minimum: 0, description: Integer IRR amount; compatibility field name retained. }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        sortOrder: { type: integer }
+        isAvailable: { type: boolean }
+    MenuItemInput:
+      type: object
+      required: [name, description, priceCents, currency, sortOrder, isAvailable]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 140 }
+        description: { type: string, maxLength: 500 }
+        priceCents: { type: integer, format: int64, minimum: 0, maximum: 100000000000 }
+        currency: { type: string, minLength: 3, maxLength: 3 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        isAvailable: { type: boolean }
+    Restaurant:
+      type: object
+      required: [id, name, description, hours, sortOrder, isActive, menuItems]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        description: { type: string }
+        hours: { type: string }
+        sortOrder: { type: integer }
+        isActive: { type: boolean }
+        menuItems: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+    RestaurantInput:
+      type: object
+      required: [name, description, hours, sortOrder, isActive]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        description: { type: string, maxLength: 500 }
+        hours: { type: string, maxLength: 120 }
+        sortOrder: { type: integer, minimum: 0, maximum: 10000 }
+        isActive: { type: boolean }
+    HotelContent:
+      type: object
+      required: [hotel, facilities, promotions, restaurants]
+      properties:
+        hotel: { $ref: '#/components/schemas/Hotel' }
+        facilities: { type: array, items: { $ref: '#/components/schemas/Facility' } }
+        promotions: { type: array, items: { $ref: '#/components/schemas/Promotion' } }
+        restaurants: { type: array, items: { $ref: '#/components/schemas/Restaurant' } }
     ServiceRequestStatus:
       type: string
       enum: [new, in_progress, completed, cancelled]
@@ -1024,11 +1580,153 @@ components:
                     firstName: { type: string }
                     lastName: { type: string }
                 room: { $ref: '#/components/schemas/Room' }
+    ConversationStatus:
+      type: string
+      enum: [ai, handed_off, closed]
+    ConversationMessageInput:
+      type: object
+      required: [body]
+      properties:
+        body: { type: string, minLength: 1, maxLength: 1000 }
+    ChatMessage:
+      type: object
+      required: [id, role, body, senderName, redacted, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        role: { type: string, enum: [guest, ai, staff, system] }
+        body: { type: string }
+        senderName: { type: string }
+        confidence: { type: number, minimum: 0, maximum: 1 }
+        redacted: { type: boolean, description: True when direct identifiers were removed before persistence. }
+        createdAt: { type: string, format: date-time }
+    Conversation:
+      type: object
+      required: [id, status, guest, assignedTo, guestUnreadCount, staffUnreadCount, lastMessageAt, messages]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ConversationStatus' }
+        guest:
+          type: object
+          required: [id, firstName, lastName]
+          properties:
+            id: { type: string, format: uuid }
+            firstName: { type: string }
+            lastName: { type: string }
+        stay:
+          type: object
+          required: [id, room]
+          properties:
+            id: { type: string, format: uuid }
+            room: { $ref: '#/components/schemas/Room' }
+        assignedTo:
+          oneOf:
+            - $ref: '#/components/schemas/Staff'
+            - type: 'null'
+        guestUnreadCount: { type: integer, minimum: 0 }
+        staffUnreadCount: { type: integer, minimum: 0 }
+        lastMessageAt: { type: string, format: date-time }
+        messages: { type: array, items: { $ref: '#/components/schemas/ChatMessage' } }
+    KnowledgeStatus:
+      type: string
+      enum: [draft, pending_review, approved, rejected]
+    KnowledgeItem:
+      type: object
+      required: [id, title, content, source, status, version, supersedesId, submittedById, reviewedById, reviewedAt, reviewNote, createdAt, updatedAt]
+      properties:
+        id: { type: string, format: uuid }
+        title: { type: string }
+        content: { type: string }
+        source: { type: string }
+        status: { $ref: '#/components/schemas/KnowledgeStatus' }
+        version: { type: integer, minimum: 1 }
+        supersedesId: { type: [string, 'null'], format: uuid }
+        submittedById: { type: [string, 'null'], format: uuid }
+        reviewedById: { type: [string, 'null'], format: uuid }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewNote: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    KnowledgeInput:
+      type: object
+      required: [title, content, source]
+      properties:
+        title: { type: string, minLength: 2, maxLength: 240 }
+        content: { type: string, minLength: 2, maxLength: 2000 }
+        source: { type: string, maxLength: 120 }
+        supersedesId: { type: [string, 'null'], format: uuid }
+    ReportSummary:
+      type: object
+      required: [requestsCreated, openRequests, completedRequests, averageFulfillmentMinutes, paidOrders, orderedRevenueCents, recognizedRevenueCents, activeRooms, totalRooms, handedOffConversations, pendingKnowledge, failedSecurityEvents]
+      properties:
+        requestsCreated: { type: integer, format: int64 }
+        openRequests: { type: integer, format: int64 }
+        completedRequests: { type: integer, format: int64 }
+        averageFulfillmentMinutes: { type: integer, format: int64 }
+        paidOrders: { type: integer, format: int64 }
+        orderedRevenueCents: { type: integer, format: int64, description: Integer IRR amount; compatibility field name retained. }
+        recognizedRevenueCents: { type: integer, format: int64, description: Completed-order revenue in integer IRR. }
+        activeRooms: { type: integer, format: int64 }
+        totalRooms: { type: integer, format: int64 }
+        handedOffConversations: { type: integer, format: int64 }
+        pendingKnowledge: { type: integer, format: int64 }
+        failedSecurityEvents: { type: integer, format: int64 }
+    OperationalReport:
+      type: object
+      required: [from, to, timezone, currency, summary, daily, byService]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        timezone: { type: string }
+        currency: { const: IRR }
+        summary: { $ref: '#/components/schemas/ReportSummary' }
+        daily:
+          type: array
+          items:
+            type: object
+            required: [date, requests, completed, revenueCents]
+            properties:
+              date: { type: string, format: date }
+              requests: { type: integer, format: int64 }
+              completed: { type: integer, format: int64 }
+              revenueCents: { type: integer, format: int64 }
+        byService:
+          type: array
+          items:
+            type: object
+            required: [serviceId, serviceName, orders, quantity, orderedRevenueCents, recognizedRevenueCents]
+            properties:
+              serviceId: { type: string, format: uuid }
+              serviceName: { type: string }
+              orders: { type: integer, format: int64 }
+              quantity: { type: integer, format: int64 }
+              orderedRevenueCents: { type: integer, format: int64 }
+              recognizedRevenueCents: { type: integer, format: int64 }
+    AuditLog:
+      type: object
+      required: [id, createdAt, requestId, actorType, action, outcome, ipAddress, metadata]
+      properties:
+        id: { type: string, format: uuid }
+        createdAt: { type: string, format: date-time }
+        requestId: { type: string }
+        actorId: { type: string, format: uuid }
+        actorType: { type: string }
+        action: { type: string }
+        outcome: { type: string, enum: [success, failure] }
+        ipAddress: { type: string }
+        metadata: { type: object, additionalProperties: true }
+    AuditPage:
+      type: object
+      required: [items, total, limit, offset]
+      properties:
+        items: { type: array, items: { $ref: '#/components/schemas/AuditLog' } }
+        total: { type: integer, format: int64 }
+        limit: { type: integer }
+        offset: { type: integer }
     RealtimeEvent:
       type: object
       required: [type, payload, emittedAt]
       properties:
-        type: { type: string, enum: [connected, request.created, request.updated] }
+        type: { type: string, enum: [connected, request.created, request.updated, message.created, conversation.handoff, conversation.updated] }
         payload: { type: object }
         emittedAt: { type: string, format: date-time }
     SessionBase:
@@ -1114,7 +1812,11 @@ components:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
     RateLimited:
-      description: Too many authentication attempts
+      description: Too many requests for the applicable API, mutation, authentication, or onboarding window
+      headers:
+        Retry-After:
+          schema: { type: integer }
+          description: Seconds before retrying.
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }

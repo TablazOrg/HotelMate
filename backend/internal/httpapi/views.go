@@ -163,6 +163,9 @@ type serviceView struct {
 	Currency         string                 `json:"currency"`
 	IsPaid           bool                   `json:"isPaid"`
 	IsQuickAction    bool                   `json:"isQuickAction"`
+	IsPreArrival     bool                   `json:"isPreArrival"`
+	AvailableFrom    string                 `json:"availableFrom"`
+	AvailableUntil   string                 `json:"availableUntil"`
 	SortOrder        int                    `json:"sortOrder"`
 	IsActive         bool                   `json:"isActive"`
 }
@@ -173,6 +176,7 @@ func toServiceView(service models.Service) serviceView {
 		Category: service.Category, Icon: service.Icon, FulfillmentRole: service.FulfillmentRole,
 		EstimatedMinutes: service.EstimatedMinutes, PriceCents: service.PriceCents, Currency: service.Currency,
 		IsPaid: service.IsPaid, IsQuickAction: service.IsQuickAction, SortOrder: service.SortOrder, IsActive: service.IsActive,
+		IsPreArrival: service.IsPreArrival, AvailableFrom: service.AvailableFrom, AvailableUntil: service.AvailableUntil,
 	}
 }
 

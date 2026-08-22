@@ -22,6 +22,7 @@ func TestValidProductionConfig(t *testing.T) {
 		JWTIssuer: "hotelmate", StaffTokenTTL: time.Hour, GuestTokenTTL: time.Hour,
 		OnboardingToken: "a-separate-secure-onboarding-token",
 		UploadsDir:      "/app/uploads", DocumentMaxBytes: 1024, DocumentRetention: time.Hour,
+		ChatRetention: time.Hour, ChatConfidence: 0.5,
 	}
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("expected valid production config: %v", err)

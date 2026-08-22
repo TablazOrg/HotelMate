@@ -5,12 +5,15 @@ import {
 } from './api'
 import { GuestCheckInPanel } from './GuestCheckInPanel'
 import { GuestExperience } from './GuestExperience'
+import { ContentAdminPanel, PreArrivalOrders, VisitorExperience } from './HotelContentPanels'
+import { KnowledgeAdminPanel, StaffConversationInbox } from './ConversationPanels'
 import { OperationsPanel } from './OperationsPanel'
+import { AuditPanel, ReportingPanel } from './ReportingPanel'
 import { AdminRequestOverview, ServiceCatalogPanel, StaffRequestQueue } from './ServiceOperationsPanel'
-import { formatDate, formatPrice, handoffTheme, toFaDigits } from './handoff'
+import { formatDate, handoffTheme, toFaDigits } from './handoff'
 
 type AuthenticatedState = { session: SessionRecord; staff?: Staff; hotel?: Hotel; stay?: Stay }
-type AdminTab = 'dashboard' | 'reception' | 'catalog' | 'branding' | 'staff' | 'knowledge'
+type AdminTab = 'dashboard' | 'reception' | 'catalog' | 'content' | 'conversations' | 'reports' | 'security' | 'branding' | 'staff' | 'knowledge'
 
 const roleLabels: Record<StaffRole, string> = {
   primary_admin: 'مدیر اصلی', secondary_admin: 'مدیر دوم', operations_manager: 'مدیر عملیات',
@@ -53,7 +56,7 @@ function App() {
   }
 
   if (booting) return <div className="loading-screen"><span className="spinner" />در حال بازیابی نشست…</div>
-  if (!authState) return <LoginScreen onAuthenticated={authenticate} />
+  if (!authState) return window.location.pathname.startsWith('/visitor') ? <VisitorExperience /> : <LoginScreen onAuthenticated={authenticate} />
   if (authState.session.actorType === 'guest' && authState.stay) {
     return authState.stay.status === 'pre_arrival'
       ? <PreArrivalExperience stay={authState.stay} token={authState.session.token} onLogout={logout} />
@@ -123,6 +126,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLog
       <nav className="auth-links">
         {mode === 'staff' ? <a href="/">ورود مهمان <i className="ri-arrow-left-line" /></a> : <><a href={guestAccess === 'room' ? '/pre-arrival' : '/'}>{guestAccess === 'room' ? 'ورود پیش از رسیدن' : 'ورود مهمان مقیم'} <i className="ri-arrow-left-line" /></a><a href="/staff">ورود پرسنل <i className="ri-shield-user-line" /></a></>}
       </nav>
+      {mode === 'guest' && <a className="visitor-link" href={`/visitor${hotelSlug ? `?hotel=${encodeURIComponent(hotelSlug.trim().toLowerCase())}` : ''}`}>مشاهده امکانات هتل بدون ورود <i className="ri-arrow-left-line" /></a>}
       <div className={`api-status ${apiOnline === false ? 'offline' : ''}`}><i />{apiOnline === null ? 'در حال بررسی سرویس' : apiOnline ? 'ارتباط امن برقرار است' : 'سرویس در دسترس نیست'}</div>
     </section>
   </main>
@@ -132,9 +136,6 @@ function PreArrivalExperience({ stay, token, onLogout }: { stay: Stay; token: st
   const arrival = stay.reservation?.arrivalDate
   const departure = stay.reservation?.departureDate
   const days = arrival ? Math.max(0, Math.ceil((new Date(arrival).getTime() - Date.now()) / 86400000)) : 0
-  const futureServices = [
-    ['ri-taxi-line', 'ترانسفر فرودگاه', 6800000], ['ri-time-line', 'خروج دیرهنگام تا ۱۸', 9000000], ['ri-cake-3-line', 'گل و شیرینی در اتاق', 5500000],
-  ] as const
   return <div className="prearrival-app" style={handoffTheme(stay.hotel.primaryColor)}><div className="mobile-surface prearrival-surface">
     <header className="prearrival-top"><div className="auth-brand small"><span>H</span><strong>{stay.hotel.name}</strong></div><button type="button" onClick={onLogout}><i className="ri-logout-box-r-line" /></button></header>
     <main className="prearrival-content view-enter">
@@ -142,37 +143,46 @@ function PreArrivalExperience({ stay, token, onLogout }: { stay: Stay; token: st
       <h1>{days ? `تا اقامت شما ${toFaDigits(days)} روز مانده` : 'برای اقامت شما آماده‌ایم'}</h1>
       <p className="reservation-line">{stay.hotel.name} · {stay.room.type || 'اتاق رزرو شده'} · {formatDate(arrival)} تا {formatDate(departure)}</p>
       <GuestCheckInPanel token={token} />
-      <section className="prearrival-orders"><div className="compact-heading"><h2>قبل از رسیدن سفارش دهید</h2><span>آماده در لحظه ورود · مرحله بعد</span></div><div className="service-rows">{futureServices.map(([icon, name, price]) => <article className="service-row" key={name}><span className="service-icon"><i className={icon} /></span><div><strong>{name}</strong><small>{formatPrice(price)} تومان · پرداخت در محل</small></div><button type="button" disabled>به‌زودی</button></article>)}</div></section>
+      <PreArrivalOrders token={token} />
     </main>
   </div></div>
 }
 
 function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { session: SessionRecord; initialStaff: Staff; initialHotel: Hotel; onLogout: () => void }) {
   const [hotel, setHotel] = useState(initialHotel)
-  const [tab, setTab] = useState<AdminTab>('dashboard')
   const isAdmin = initialStaff.role === 'primary_admin' || initialStaff.role === 'secondary_admin'
   const canManageCatalog = isAdmin || initialStaff.role === 'operations_manager'
+  const canReport = isAdmin || initialStaff.role === 'operations_manager'
   const hasReception = isAdmin || initialStaff.role === 'operations_manager' || initialStaff.role === 'reception'
   const isFulfillment = initialStaff.role === 'housekeeping' || initialStaff.role === 'food_beverage'
+  const [tab, setTab] = useState<AdminTab>(canReport ? 'dashboard' : 'reception')
   if (isFulfillment) return <StaffRequestQueue token={session.token} staff={initialStaff} hotel={hotel} onLogout={onLogout} />
 
   const navigation: { id: AdminTab; icon: string; label: string; visible: boolean }[] = [
-    { id: 'dashboard', icon: 'ri-dashboard-line', label: 'داشبورد', visible: true },
+    { id: 'dashboard', icon: 'ri-dashboard-line', label: 'داشبورد', visible: canReport },
     { id: 'reception', icon: 'ri-hotel-line', label: 'رزرو و پذیرش', visible: hasReception },
     { id: 'catalog', icon: 'ri-layout-grid-line', label: 'کاتالوگ سرویس‌ها', visible: true },
+    { id: 'content', icon: 'ri-store-2-line', label: 'امکانات و منو', visible: canManageCatalog },
+    { id: 'conversations', icon: 'ri-chat-3-line', label: 'گفتگوهای پذیرش', visible: hasReception },
     { id: 'knowledge', icon: 'ri-sparkling-2-line', label: 'دانش‌نامه AI', visible: true },
+    { id: 'reports', icon: 'ri-line-chart-line', label: 'گزارش‌ها', visible: canReport },
+    { id: 'security', icon: 'ri-shield-check-line', label: 'امنیت و ممیزی', visible: isAdmin },
     { id: 'branding', icon: 'ri-palette-line', label: 'برندینگ', visible: isAdmin },
     { id: 'staff', icon: 'ri-team-line', label: 'حساب‌های پرسنل', visible: isAdmin },
   ]
   return <div className="admin-app" style={handoffTheme(hotel.primaryColor)}><div className="admin-shell">
-    <aside className="admin-sidebar"><div className="admin-logo"><span>H</span><div><strong>{hotel.name}</strong><small>پنل مدیریت</small></div></div><p className="nav-eyebrow">فضای کاری</p><nav>{navigation.filter((item) => item.visible).map((item) => <button type="button" key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><i className={item.icon} />{item.label}{item.id === 'knowledge' && <small>به‌زودی</small>}</button>)}</nav><div className="admin-identity"><span>{initialStaff.firstName.slice(0, 1)}{initialStaff.lastName.slice(0, 1)}</span><div><strong>{initialStaff.firstName} {initialStaff.lastName}</strong><small>{roleLabels[initialStaff.role]}</small></div><button type="button" onClick={onLogout} title="خروج"><i className="ri-logout-box-r-line" /></button></div></aside>
+    <aside className="admin-sidebar"><div className="admin-logo"><span>H</span><div><strong>{hotel.name}</strong><small>پنل مدیریت</small></div></div><p className="nav-eyebrow">فضای کاری</p><nav>{navigation.filter((item) => item.visible).map((item) => <button type="button" key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><i className={item.icon} />{item.label}</button>)}</nav><div className="admin-identity"><span>{initialStaff.firstName.slice(0, 1)}{initialStaff.lastName.slice(0, 1)}</span><div><strong>{initialStaff.firstName} {initialStaff.lastName}</strong><small>{roleLabels[initialStaff.role]}</small></div><button type="button" onClick={onLogout} title="خروج"><i className="ri-logout-box-r-line" /></button></div></aside>
     <main className="admin-content">
       {tab === 'dashboard' && <AdminRequestOverview token={session.token} />}
       {tab === 'reception' && <OperationsPanel token={session.token} />}
       {tab === 'catalog' && <ServiceCatalogPanel token={session.token} canManage={canManageCatalog} />}
+      {tab === 'content' && <ContentAdminPanel token={session.token} />}
+      {tab === 'conversations' && <StaffConversationInbox token={session.token} />}
       {tab === 'branding' && <BrandingPanel hotel={hotel} token={session.token} onUpdated={setHotel} />}
       {tab === 'staff' && <StaffPanel currentStaff={initialStaff} token={session.token} />}
-      {tab === 'knowledge' && <FutureAdminPanel />}
+      {tab === 'knowledge' && <KnowledgeAdminPanel token={session.token} canReview={isAdmin} />}
+      {tab === 'reports' && <ReportingPanel token={session.token} />}
+      {tab === 'security' && <AuditPanel token={session.token} />}
     </main>
   </div></div>
 }
@@ -196,10 +206,6 @@ function StaffPanel({ currentStaff, token }: { currentStaff: Staff; token: strin
   useEffect(() => { api<{ staff: Staff[] }>('/api/v1/staff/users', {}, token).then((response) => setStaff(response.staff)).catch((requestError) => setError(messageFrom(requestError))).finally(() => setLoading(false)) }, [token])
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setError(''); try { const response = await api<{ staff: Staff }>('/api/v1/staff/users', { method: 'POST', body: JSON.stringify(form) }, token); setStaff((items) => [...items, response.staff]); setShowForm(false); setForm({ firstName: '', lastName: '', email: '', password: '', role: 'reception' }) } catch (requestError) { setError(messageFrom(requestError)) } }
   return <div className="staff-admin-page view-enter"><div className="admin-page-heading"><div><p>{toFaDigits(staff.length)} حساب سازمانی</p><h1>حساب‌های پرسنل</h1></div><button type="button" className="primary-button compact" onClick={() => setShowForm(!showForm)}>{showForm ? 'بستن' : 'حساب جدید'}</button></div>{showForm && <form onSubmit={submit} className="catalog-form"><div className="form-row"><label>نام<input value={form.firstName} onChange={(event) => setForm({ ...form, firstName: event.target.value })} required /></label><label>نام خانوادگی<input value={form.lastName} onChange={(event) => setForm({ ...form, lastName: event.target.value })} required /></label></div><label>ایمیل<input type="email" dir="ltr" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} required /></label><div className="form-row"><label>رمز عبور<input type="password" minLength={12} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} required /></label><label>نقش<select value={form.role} onChange={(event) => setForm({ ...form, role: event.target.value as StaffRole })}>{roles.map((role) => <option value={role} key={role}>{roleLabels[role]}</option>)}</select></label></div><button className="primary-button">ایجاد حساب</button></form>}{error && <div className="inline-alert error">{error}</div>}{loading ? <div className="center-loading"><span className="spinner" /> در حال دریافت…</div> : <div className="staff-admin-list">{staff.map((user) => <article key={user.id}><span>{user.firstName.slice(0, 1)}{user.lastName.slice(0, 1)}</span><div><strong>{user.firstName} {user.lastName}</strong><small>{user.email} · {roleLabels[user.role]}</small></div><i className={user.isActive ? 'active' : ''} /></article>)}</div>}</div>
-}
-
-function FutureAdminPanel() {
-  return <div className="future-admin view-enter"><div className="admin-page-heading"><div><p>Milestone 5</p><h1>دانش‌نامه هوش مصنوعی</h1></div><span className="status-pill warning">در برنامه توسعه</span></div><div><i className="ri-sparkling-2-line" /><h2>گردش‌کار دانش‌نامه هنوز فعال نیست</h2><p>تأیید پاسخ‌ها، کنترل اعتماد و انتقال گفتگو به پذیرش پس از تکمیل کنترل‌های ایمنی و حریم خصوصی ارائه می‌شود.</p></div></div>
 }
 
 export default App

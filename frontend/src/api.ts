@@ -110,8 +110,60 @@ export interface Service {
   currency: string
   isPaid: boolean
   isQuickAction: boolean
+  isPreArrival: boolean
+  availableFrom: string
+  availableUntil: string
   sortOrder: number
   isActive: boolean
+}
+
+export interface Facility {
+  id: string
+  name: string
+  description: string
+  icon: string
+  hours: string
+  sortOrder: number
+  isActive: boolean
+}
+
+export interface Promotion {
+  id: string
+  title: string
+  description: string
+  discountPct: number
+  badgeText: string
+  startsAt: string
+  endsAt: string
+  isActive: boolean
+}
+
+export interface MenuItem {
+  id: string
+  restaurantId: string
+  name: string
+  description: string
+  priceCents: number
+  currency: string
+  sortOrder: number
+  isAvailable: boolean
+}
+
+export interface Restaurant {
+  id: string
+  name: string
+  description: string
+  hours: string
+  sortOrder: number
+  isActive: boolean
+  menuItems: MenuItem[]
+}
+
+export interface HotelContent {
+  hotel: Hotel
+  facilities: Facility[]
+  promotions: Promotion[]
+  restaurants: Restaurant[]
 }
 
 export type ServiceRequestStatus = 'new' | 'in_progress' | 'completed' | 'cancelled'
@@ -144,9 +196,102 @@ export interface ServiceRequest {
   stay?: { id: string; guest: Guest; room: Room }
 }
 
+export type ConversationStatus = 'ai' | 'handed_off' | 'closed'
+
+export interface ChatMessage {
+  id: string
+  role: 'guest' | 'ai' | 'staff' | 'system'
+  body: string
+  senderName: string
+  confidence?: number
+  redacted: boolean
+  createdAt: string
+}
+
+export interface Conversation {
+  id: string
+  status: ConversationStatus
+  guest: Guest
+  stay?: { id: string; room: Room }
+  assignedTo: Staff | null
+  guestUnreadCount: number
+  staffUnreadCount: number
+  lastMessageAt: string
+  messages: ChatMessage[]
+}
+
+export type KnowledgeStatus = 'draft' | 'pending_review' | 'approved' | 'rejected'
+
+export interface KnowledgeItem {
+  id: string
+  title: string
+  content: string
+  source: string
+  status: KnowledgeStatus
+  version: number
+  supersedesId: string | null
+  submittedById: string | null
+  reviewedById: string | null
+  reviewedAt: string | null
+  reviewNote: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReportSummary {
+  requestsCreated: number
+  openRequests: number
+  completedRequests: number
+  averageFulfillmentMinutes: number
+  paidOrders: number
+  orderedRevenueCents: number
+  recognizedRevenueCents: number
+  activeRooms: number
+  totalRooms: number
+  handedOffConversations: number
+  pendingKnowledge: number
+  failedSecurityEvents: number
+}
+
+export interface OperationalReport {
+  from: string
+  to: string
+  timezone: string
+  currency: string
+  summary: ReportSummary
+  daily: { date: string; requests: number; completed: number; revenueCents: number }[]
+  byService: {
+    serviceId: string
+    serviceName: string
+    orders: number
+    quantity: number
+    orderedRevenueCents: number
+    recognizedRevenueCents: number
+  }[]
+}
+
+export interface AuditLog {
+  id: string
+  createdAt: string
+  requestId: string
+  actorId?: string
+  actorType: string
+  action: string
+  outcome: 'success' | 'failure'
+  ipAddress: string
+  metadata: Record<string, unknown>
+}
+
+export interface AuditPage {
+  items: AuditLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
 export interface RealtimeEvent {
-  type: 'connected' | 'request.created' | 'request.updated'
-  payload: { actorType?: ActorType; request?: ServiceRequest }
+  type: 'connected' | 'request.created' | 'request.updated' | 'message.created' | 'conversation.handoff' | 'conversation.updated'
+  payload: { actorType?: ActorType; request?: ServiceRequest; conversation?: Conversation }
   emittedAt: string
 }
 
@@ -170,12 +315,14 @@ export interface GuestLoginResponse extends SessionRecord {
 export class ApiError extends Error {
   status: number
   code: string
+  requestId: string
 
-  constructor(status: number, code: string, message: string) {
-    super(message)
+  constructor(status: number, code: string, message: string, requestId = '') {
+    super(requestId ? `${message} · شناسه رهگیری ${requestId}` : message)
     this.name = 'ApiError'
     this.status = status
     this.code = code
+    this.requestId = requestId
   }
 }
 
@@ -189,7 +336,7 @@ export async function api<T>(path: string, init: RequestInit = {}, token?: strin
   if (!response.ok) {
     const code = payload?.error?.code ?? 'request_failed'
     const message = payload?.error?.message ?? 'ارتباط با سرور انجام نشد'
-    throw new ApiError(response.status, code, message)
+    throw new ApiError(response.status, code, message, response.headers.get('X-Request-ID') ?? '')
   }
   return payload as T
 }
@@ -198,7 +345,7 @@ export async function apiBlob(path: string, token: string): Promise<{ blob: Blob
   const response = await fetch(`${apiBaseUrl}${path}`, { headers: { Authorization: `Bearer ${token}` } })
   if (!response.ok) {
     const payload = await response.json().catch(() => null)
-    throw new ApiError(response.status, payload?.error?.code ?? 'request_failed', payload?.error?.message ?? 'دریافت فایل انجام نشد')
+    throw new ApiError(response.status, payload?.error?.code ?? 'request_failed', payload?.error?.message ?? 'دریافت فایل انجام نشد', response.headers.get('X-Request-ID') ?? '')
   }
   const disposition = response.headers.get('Content-Disposition') ?? ''
   const filename = disposition.match(/filename="?([^";]+)"?/i)?.[1] ?? 'identity-document'

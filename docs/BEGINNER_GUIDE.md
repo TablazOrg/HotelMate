@@ -2,9 +2,7 @@
 
 ## What is currently available
 
-Milestones 0–2 are implemented: the Go/PostgreSQL/React runtime, hotel onboarding, separate staff and guest JWT sessions, tenant and role enforcement, public hotel branding, staff account management, reservation/check-in/check-out operations, pre-arrival login and document upload, and the RTL guest/admin/reception UI.
-
-Service requests, reservations, real-time updates, content catalogs, and AI conversations are later milestones and are intentionally not represented as complete.
+Milestones 0–6 are implemented: the Go/PostgreSQL/React runtime, hotel onboarding, separate staff and guest JWT sessions, tenant and role enforcement, public hotel branding and content, staff account management, reservation/check-in/check-out operations, pre-arrival login and document upload, free and paid service requests, operations queues, realtime updates, approved-knowledge conversations with reception handoff, operational/revenue reporting, security audit administration, backups, and production hardening in the handoff-based RTL UI.
 
 ## Start the project
 
@@ -31,6 +29,9 @@ The command is disabled when `APP_ENV=production`. It prints local-only staff an
 ```bash
 make backend-test
 make frontend-build
+make purge-messages
+make migrate
+make smoke BASE_URL=http://localhost:3000
 make logs
 make down
 ```

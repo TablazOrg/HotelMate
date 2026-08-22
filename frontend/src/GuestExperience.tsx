@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api, subscribeRealtime, type Service, type ServiceRequest, type Stay } from './api'
+import { GuestChat } from './ConversationPanels'
 import { formatDate, formatPrice, formatTime, handoffTheme, mergeRequest, requestStatusMeta, serviceIcon, toFaDigits } from './handoff'
 
 type GuestTab = 'home' | 'services' | 'tracking' | 'chat'
@@ -58,7 +59,6 @@ export function GuestExperience({ stay, token, onLogout }: { stay: Stay; token: 
   const openCount = requests.filter((request) => request.status === 'new' || request.status === 'in_progress').length
 
   async function createRequest(service: Service) {
-    if (service.isPaid) return
     setBusy(service.id)
     setError('')
     try {
@@ -66,7 +66,7 @@ export function GuestExperience({ stay, token, onLogout }: { stay: Stay; token: 
         method: 'POST', body: JSON.stringify({ serviceId: service.id, quantity: 1, notes: '' }),
       }, token)
       setRequests((items) => mergeRequest(items, response.request))
-      setToast(`درخواست «${service.name}» ثبت شد و به تیم هتل رسید`)
+      setToast(`${service.isPaid ? 'سفارش' : 'درخواست'} «${service.name}» ثبت شد و به تیم هتل رسید`)
       window.clearTimeout(toastTimer.current)
       toastTimer.current = window.setTimeout(() => setToast(''), 3200)
     } catch (requestError) {
@@ -83,7 +83,7 @@ export function GuestExperience({ stay, token, onLogout }: { stay: Stay; token: 
           {tab === 'home' && <HomeView stay={stay} quickServices={quickServices} paidServices={paidServices} openCount={openCount} busy={busy} onRequest={createRequest} onTracking={() => setTab('tracking')} />}
           {tab === 'services' && <ServicesView services={filteredServices} filter={filter} setFilter={setFilter} busy={busy} onRequest={createRequest} />}
           {tab === 'tracking' && <TrackingView requests={requests} connected={connected} loading={loading} />}
-          {tab === 'chat' && <ChatPlaceholder />}
+          {tab === 'chat' && <GuestChat token={token} />}
           {error && <div className="inline-alert error" role="alert"><i className="ri-error-warning-line" />{error}<button type="button" onClick={() => setError('')} aria-label="بستن"><i className="ri-close-line" /></button></div>}
         </main>
 
@@ -123,7 +123,7 @@ function HomeView({ stay, quickServices, paidServices, openCount, busy, onReques
       </div>
     </section>
     <section className="guest-section">
-      <div className="compact-heading"><h2>سرویس‌های ویژه</h2><span>پرداخت در محل · مرحله بعد</span></div>
+      <div className="compact-heading"><h2>سرویس‌های ویژه</h2><span>پرداخت در محل</span></div>
       <div className="service-rows">
         {paidServices.length ? paidServices.slice(0, 3).map((service) => <ServiceRow service={service} key={service.id} busy={busy} onRequest={onRequest} />) : <div className="future-card"><i className="ri-gift-line" /><div><strong>سرویس‌های ویژه در راه است</strong><p>سفارش‌های پولی پس از تکمیل Milestone 4 فعال می‌شوند.</p></div></div>}
       </div>
@@ -150,7 +150,7 @@ function ServiceRow({ service, busy, onRequest }: { service: Service; busy: stri
   return <article className="service-row">
     <span className="service-icon"><i className={serviceIcon(service)} /></span>
     <div><strong>{service.name}</strong><small>{service.isPaid ? `${formatPrice(service.priceCents, service.currency)} تومان · پرداخت در محل` : `رایگان · تحویل تا ${toFaDigits(service.estimatedMinutes)} دقیقه`}</small></div>
-    <button type="button" disabled={service.isPaid || busy === service.id} onClick={() => onRequest(service)}>{busy === service.id ? 'ثبت…' : service.isPaid ? 'به‌زودی' : 'درخواست'}</button>
+    <button type="button" disabled={busy === service.id} onClick={() => onRequest(service)}>{busy === service.id ? 'ثبت…' : service.isPaid ? 'سفارش' : 'درخواست'}</button>
   </article>
 }
 
@@ -171,14 +171,6 @@ function RequestCard({ request }: { request: ServiceRequest }) {
     <div className="request-card-head"><span className="service-icon"><i className={serviceIcon(request.service)} /></span><div><strong>{request.service.name}</strong><small>ثبت‌شده در {formatTime(request.createdAt)}{request.totalPriceCents > 0 ? ` · ${formatPrice(request.totalPriceCents, request.service.currency)} تومان` : ''}</small></div><span className={`status-pill ${status.className}`}>{status.label}</span></div>
     {request.status !== 'cancelled' && <><div className="request-progress">{[1, 2, 3].map((item) => <i key={item} className={item <= step ? 'filled' : ''} />)}</div><div className="progress-labels"><span>جدید</span><span>در حال انجام</span><span>تکمیل شد</span></div></>}
   </article>
-}
-
-function ChatPlaceholder() {
-  return <div className="view-enter screen-view chat-placeholder">
-    <header className="chat-head"><span><i className="ri-sparkling-2-line" /></span><div><h1>دستیار هوشمند</h1><p>به‌زودی در دسترس</p></div></header>
-    <div className="chat-future"><i className="ri-chat-smile-3-line" /><h2>گفتگو در Milestone 5 فعال می‌شود</h2><p>پاسخ‌گویی هوشمند و انتقال امن گفتگو به پذیرش پس از تکمیل دانش‌نامه و کنترل‌های حریم خصوصی ارائه خواهد شد.</p></div>
-    <div className="chat-composer disabled"><span>مثلاً: استخر تا چه ساعتی باز است؟</span><button type="button" disabled><i className="ri-send-plane-2-line" /></button></div>
-  </div>
 }
 
 function EmptyState({ icon, text }: { icon: string; text: string }) {

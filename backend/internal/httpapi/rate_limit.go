@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -56,6 +57,25 @@ func (s *Server) limit(limiter *ipRateLimiter, next http.Handler) http.Handler {
 			w.Header().Set("Retry-After", "60")
 			writeError(w, http.StatusTooManyRequests, "rate_limited", "تعداد تلاش‌ها زیاد است؛ کمی بعد دوباره امتحان کنید")
 			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func (s *Server) limitAPI(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasPrefix(r.URL.Path, "/api/") {
+			ip := clientIP(r)
+			if !s.apiLimiter.allow(ip + ":api") {
+				w.Header().Set("Retry-After", "60")
+				writeError(w, http.StatusTooManyRequests, "rate_limited", "تعداد درخواست‌ها زیاد است؛ کمی بعد دوباره امتحان کنید")
+				return
+			}
+			if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions && !s.mutationLimiter.allow(ip+":mutation") {
+				w.Header().Set("Retry-After", "60")
+				writeError(w, http.StatusTooManyRequests, "rate_limited", "تعداد تغییرات زیاد است؛ کمی بعد دوباره امتحان کنید")
+				return
+			}
 		}
 		next.ServeHTTP(w, r)
 	})

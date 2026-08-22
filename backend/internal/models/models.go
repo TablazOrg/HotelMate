@@ -189,6 +189,9 @@ type Service struct {
 	Currency         string          `gorm:"size:3;not null;default:IRR" json:"currency"`
 	IsPaid           bool            `gorm:"not null;default:false" json:"isPaid"`
 	IsQuickAction    bool            `gorm:"not null;default:false;index" json:"isQuickAction"`
+	IsPreArrival     bool            `gorm:"not null;default:false;index" json:"isPreArrival"`
+	AvailableFrom    string          `gorm:"size:5" json:"availableFrom"`
+	AvailableUntil   string          `gorm:"size:5" json:"availableUntil"`
 	SortOrder        int             `gorm:"not null;default:0" json:"sortOrder"`
 	IsActive         bool            `gorm:"not null;default:true" json:"isActive"`
 }
@@ -201,6 +204,17 @@ func CoreServices(hotelID uuid.UUID) []Service {
 		{HotelID: hotelID, Code: "amenities", Name: "لوازم بهداشتی", Description: "حوله و اقلام بهداشتی مصرفی", Category: ServiceCategoryHousekeeping, Icon: "amenities", FulfillmentRole: StaffRoleHousekeeping, EstimatedMinutes: 20, Currency: "IRR", IsQuickAction: true, SortOrder: 40, IsActive: true},
 		{HotelID: hotelID, Code: "late-checkout", Name: "خروج دیرهنگام", Description: "بررسی امکان تمدید زمان خروج", Category: ServiceCategoryOther, Icon: "clock", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 15, Currency: "IRR", IsQuickAction: true, SortOrder: 50, IsActive: true},
 		{HotelID: hotelID, Code: "transfer", Name: "ترانسفر", Description: "هماهنگی رفت‌وآمد فرودگاه یا ترمینال", Category: ServiceCategoryTransport, Icon: "car", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 30, Currency: "IRR", IsQuickAction: true, SortOrder: 60, IsActive: true},
+	}
+}
+
+func RevenueServices(hotelID uuid.UUID) []Service {
+	return []Service{
+		{HotelID: hotelID, Code: "spa-massage", Name: "اسپا و ماساژ", Description: "رزرو خدمات اسپا و ماساژ هتل", Category: ServiceCategoryWellness, Icon: "wellness", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 60, PriceCents: 8_500_000, Currency: "IRR", IsPaid: true, SortOrder: 110, IsActive: true},
+		{HotelID: hotelID, Code: "minibar-package", Name: "بسته مینی‌بار", Description: "آماده‌سازی بسته کامل مینی‌بار در اتاق", Category: ServiceCategoryFNB, Icon: "coffee", FulfillmentRole: StaffRoleFB, EstimatedMinutes: 25, PriceCents: 3_200_000, Currency: "IRR", IsPaid: true, SortOrder: 120, IsActive: true},
+		{HotelID: hotelID, Code: "tennis-court", Name: "زمین تنیس (۱ ساعت)", Description: "رزرو یک ساعت زمین تنیس", Category: ServiceCategoryWellness, Icon: "wellness", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 60, PriceCents: 4_500_000, Currency: "IRR", IsPaid: true, SortOrder: 130, IsActive: true},
+		{HotelID: hotelID, Code: "prearrival-transfer", Name: "ترانسفر فرودگاه", Description: "استقبال فرودگاهی پیش از ورود", Category: ServiceCategoryTransport, Icon: "car", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 45, PriceCents: 6_800_000, Currency: "IRR", IsPaid: true, IsPreArrival: true, SortOrder: 140, IsActive: true},
+		{HotelID: hotelID, Code: "prearrival-late-checkout", Name: "خروج دیرهنگام تا ۱۸", Description: "رزرو خروج دیرهنگام پیش از ورود", Category: ServiceCategoryOther, Icon: "clock", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 15, PriceCents: 9_000_000, Currency: "IRR", IsPaid: true, IsPreArrival: true, SortOrder: 150, IsActive: true},
+		{HotelID: hotelID, Code: "welcome-flowers", Name: "گل و شیرینی در اتاق", Description: "گل و شیرینی آماده در لحظه ورود", Category: ServiceCategoryOther, Icon: "concierge", FulfillmentRole: StaffRoleReception, EstimatedMinutes: 30, PriceCents: 5_500_000, Currency: "IRR", IsPaid: true, IsPreArrival: true, SortOrder: 160, IsActive: true},
 	}
 }
 
@@ -262,6 +276,9 @@ type Facility struct {
 	Hotel       Hotel     `json:"-"`
 	Name        string    `gorm:"not null" json:"name"`
 	Description string    `json:"description"`
+	Icon        string    `gorm:"size:32;not null;default:concierge" json:"icon"`
+	Hours       string    `gorm:"size:120" json:"hours"`
+	SortOrder   int       `gorm:"not null;default:0" json:"sortOrder"`
 	IsActive    bool      `gorm:"not null;default:true" json:"isActive"`
 }
 
@@ -272,6 +289,7 @@ type Promotion struct {
 	Title       string    `gorm:"not null" json:"title"`
 	Description string    `json:"description"`
 	DiscountPct float64   `gorm:"not null;default:0" json:"discountPct"`
+	BadgeText   string    `gorm:"size:32" json:"badgeText"`
 	StartsAt    time.Time `gorm:"not null" json:"startsAt"`
 	EndsAt      time.Time `gorm:"not null" json:"endsAt"`
 	IsActive    bool      `gorm:"not null;default:true" json:"isActive"`
@@ -279,11 +297,14 @@ type Promotion struct {
 
 type Restaurant struct {
 	BaseModel
-	HotelID     uuid.UUID `gorm:"not null;index" json:"hotelId"`
-	Hotel       Hotel     `json:"-"`
-	Name        string    `gorm:"not null" json:"name"`
-	Description string    `json:"description"`
-	IsActive    bool      `gorm:"not null;default:true" json:"isActive"`
+	HotelID     uuid.UUID  `gorm:"not null;index" json:"hotelId"`
+	Hotel       Hotel      `json:"-"`
+	Name        string     `gorm:"not null" json:"name"`
+	Description string     `json:"description"`
+	Hours       string     `gorm:"size:120" json:"hours"`
+	SortOrder   int        `gorm:"not null;default:0" json:"sortOrder"`
+	IsActive    bool       `gorm:"not null;default:true" json:"isActive"`
+	MenuItems   []MenuItem `gorm:"foreignKey:RestaurantID" json:"menuItems"`
 }
 
 type MenuItem struct {
@@ -293,7 +314,38 @@ type MenuItem struct {
 	Name         string     `gorm:"not null" json:"name"`
 	Description  string     `json:"description"`
 	PriceCents   int64      `gorm:"not null;default:0" json:"priceCents"`
+	Currency     string     `gorm:"size:3;not null;default:IRR" json:"currency"`
+	SortOrder    int        `gorm:"not null;default:0" json:"sortOrder"`
 	IsAvailable  bool       `gorm:"not null;default:true" json:"isAvailable"`
+}
+
+func DefaultFacilities(hotelID uuid.UUID) []Facility {
+	return []Facility{
+		{HotelID: hotelID, Name: "استخر و سونا", Description: "استخر سرپوشیده و سونای خشک", Icon: "water", Hours: "۷ تا ۲۳", SortOrder: 10, IsActive: true},
+		{HotelID: hotelID, Name: "اسپا", Description: "ماساژ و خدمات آرامش", Icon: "wellness", Hours: "۱۰ تا ۲۲", SortOrder: 20, IsActive: true},
+		{HotelID: hotelID, Name: "پارکینگ", Description: "پارکینگ اختصاصی مهمانان", Icon: "parking", Hours: "۲۴ ساعته", SortOrder: 30, IsActive: true},
+		{HotelID: hotelID, Name: "رستوران", Description: "رستوران ایرانی و بین‌المللی", Icon: "restaurant", Hours: "۱۲ تا ۲۳", SortOrder: 40, IsActive: true},
+		{HotelID: hotelID, Name: "سالن ورزش", Description: "تجهیزات هوازی و بدنسازی", Icon: "fitness", Hours: "۶ تا ۲۳", SortOrder: 50, IsActive: true},
+		{HotelID: hotelID, Name: "وای‌فای رایگان", Description: "اینترنت پرسرعت در تمام هتل", Icon: "wifi", Hours: "۲۴ ساعته", SortOrder: 60, IsActive: true},
+	}
+}
+
+func DefaultPromotion(hotelID uuid.UUID, now time.Time) Promotion {
+	return Promotion{
+		HotelID: hotelID, Title: "پیشنهاد ویژه اقامت", Description: "۱۵٪ تخفیف برای رزرو مستقیم سرویس‌های منتخب هتل",
+		DiscountPct: 15, BadgeText: "٪۱۵", StartsAt: now.AddDate(0, -1, 0), EndsAt: now.AddDate(1, 0, 0), IsActive: true,
+	}
+}
+
+func DefaultRestaurant(hotelID uuid.UUID) (Restaurant, []MenuItem) {
+	restaurant := Restaurant{HotelID: hotelID, Name: "رستوران اصلی", Description: "غذاهای ایرانی و بین‌المللی", Hours: "سرو ۱۲ تا ۲۳", SortOrder: 10, IsActive: true}
+	items := []MenuItem{
+		{Name: "کباب سلطانی", Description: "راسته گوسفندی، برنج ایرانی و دورچین", PriceCents: 9_800_000, Currency: "IRR", SortOrder: 10, IsAvailable: true},
+		{Name: "خوراک ماهی قزل‌آلا", Description: "ماهی تازه، سبزیجات و سس مخصوص", PriceCents: 7_200_000, Currency: "IRR", SortOrder: 20, IsAvailable: true},
+		{Name: "پاستا آلفردو", Description: "مرغ، قارچ و سس خامه‌ای", PriceCents: 5_400_000, Currency: "IRR", SortOrder: 30, IsAvailable: true},
+		{Name: "سوپ روز", Description: "تهیه‌شده با مواد تازه روز", PriceCents: 2_200_000, Currency: "IRR", SortOrder: 40, IsAvailable: true},
+	}
+	return restaurant, items
 }
 
 type KnowledgeStatus string
@@ -307,13 +359,38 @@ const (
 
 type KnowledgeItem struct {
 	BaseModel
-	HotelID      uuid.UUID       `gorm:"not null;index" json:"hotelId"`
-	Hotel        Hotel           `json:"-"`
-	Title        string          `gorm:"not null" json:"title"`
-	Content      string          `gorm:"not null;type:text" json:"content"`
-	Status       KnowledgeStatus `gorm:"size:24;not null;default:draft;index" json:"status"`
-	ApprovedByID *uuid.UUID      `gorm:"index" json:"approvedById"`
-	ApprovedAt   *time.Time      `json:"approvedAt"`
+	HotelID       uuid.UUID       `gorm:"not null;index" json:"hotelId"`
+	Hotel         Hotel           `json:"-"`
+	Title         string          `gorm:"not null" json:"title"`
+	Content       string          `gorm:"not null;type:text" json:"content"`
+	Source        string          `gorm:"size:120;not null;default:staff" json:"source"`
+	Status        KnowledgeStatus `gorm:"size:24;not null;default:draft;index" json:"status"`
+	Version       int             `gorm:"not null;default:1" json:"version"`
+	SupersedesID  *uuid.UUID      `gorm:"type:uuid;index" json:"supersedesId"`
+	SubmittedByID *uuid.UUID      `gorm:"type:uuid;index" json:"submittedById"`
+	ReviewedByID  *uuid.UUID      `gorm:"type:uuid;index" json:"reviewedById"`
+	ReviewedAt    *time.Time      `json:"reviewedAt"`
+	ReviewNote    string          `gorm:"size:500" json:"reviewNote"`
+}
+
+func DefaultKnowledge(hotelID uuid.UUID, now time.Time) []KnowledgeItem {
+	items := []KnowledgeItem{
+		{Title: "ساعت فعالیت استخر چیست؟", Content: "استخر سرپوشیده و سونا هر روز از ساعت ۷ تا ۲۳ در دسترس مهمانان است."},
+		{Title: "صبحانه چه ساعتی سرو می‌شود؟", Content: "صبحانه هر روز از ساعت ۷ تا ۱۰:۳۰ در رستوران اصلی هتل سرو می‌شود."},
+		{Title: "اطلاعات وای‌فای هتل چیست؟", Content: "وای‌فای پرسرعت در همه بخش‌های هتل رایگان است؛ اطلاعات اتصال روی کارت داخل اتاق قرار دارد."},
+		{Title: "ساعت چک‌اوت چه زمانی است؟", Content: "زمان استاندارد خروج ساعت ۱۲ است. برای خروج دیرهنگام می‌توانید از کاتالوگ سرویس‌ها درخواست ثبت کنید."},
+		{Title: "اسپا چه خدماتی دارد؟", Content: "اسپا هر روز از ساعت ۱۰ تا ۲۲ فعال است و رزرو ماساژ از بخش سرویس‌های ویژه انجام می‌شود."},
+		{Title: "آیا هتل پارکینگ دارد؟", Content: "پارکینگ اختصاصی مهمانان به‌صورت ۲۴ ساعته و بدون هزینه اضافی در دسترس است."},
+	}
+	for index := range items {
+		items[index].HotelID = hotelID
+		items[index].Source = "محتوای تأییدشده هتل"
+		items[index].Status = KnowledgeApproved
+		items[index].Version = 1
+		approvedAt := now
+		items[index].ReviewedAt = &approvedAt
+	}
+	return items
 }
 
 type ConversationStatus string
@@ -326,12 +403,19 @@ const (
 
 type Conversation struct {
 	BaseModel
-	HotelID uuid.UUID          `gorm:"not null;index" json:"hotelId"`
-	Hotel   Hotel              `json:"-"`
-	GuestID uuid.UUID          `gorm:"not null;index" json:"guestId"`
-	Guest   Guest              `json:"guest"`
-	StayID  *uuid.UUID         `gorm:"index" json:"stayId"`
-	Status  ConversationStatus `gorm:"size:24;not null;default:ai" json:"status"`
+	HotelID       uuid.UUID          `gorm:"not null;index" json:"hotelId"`
+	Hotel         Hotel              `json:"-"`
+	GuestID       uuid.UUID          `gorm:"not null;index" json:"guestId"`
+	Guest         Guest              `json:"guest"`
+	StayID        *uuid.UUID         `gorm:"type:uuid;index;uniqueIndex" json:"stayId"`
+	Stay          *Stay              `json:"stay,omitempty"`
+	AssignedToID  *uuid.UUID         `gorm:"type:uuid;index" json:"assignedToId"`
+	AssignedTo    *StaffUser         `gorm:"foreignKey:AssignedToID" json:"assignedTo,omitempty"`
+	Status        ConversationStatus `gorm:"size:24;not null;default:ai;index" json:"status"`
+	GuestReadAt   *time.Time         `json:"guestReadAt"`
+	StaffReadAt   *time.Time         `json:"staffReadAt"`
+	LastMessageAt time.Time          `gorm:"not null;index" json:"lastMessageAt"`
+	Messages      []Message          `gorm:"foreignKey:ConversationID" json:"messages,omitempty"`
 }
 
 type MessageRole string
@@ -345,11 +429,15 @@ const (
 
 type Message struct {
 	BaseModel
-	ConversationID uuid.UUID    `gorm:"not null;index" json:"conversationId"`
-	Conversation   Conversation `json:"-"`
-	Role           MessageRole  `gorm:"size:16;not null" json:"role"`
-	Body           string       `gorm:"not null;type:text" json:"body"`
-	Confidence     *float64     `json:"confidence,omitempty"`
+	ConversationID  uuid.UUID    `gorm:"not null;index" json:"conversationId"`
+	Conversation    Conversation `json:"-"`
+	Role            MessageRole  `gorm:"size:16;not null" json:"role"`
+	SenderID        *uuid.UUID   `gorm:"type:uuid;index" json:"senderId"`
+	KnowledgeItemID *uuid.UUID   `gorm:"type:uuid;index" json:"knowledgeItemId"`
+	Body            string       `gorm:"not null;type:text" json:"body"`
+	Confidence      *float64     `json:"confidence,omitempty"`
+	Redacted        bool         `gorm:"not null;default:false" json:"redacted"`
+	ExpiresAt       time.Time    `gorm:"not null;index" json:"expiresAt"`
 }
 
 type AuditOutcome string
@@ -364,6 +452,7 @@ const (
 type AuditLog struct {
 	ID        uuid.UUID       `gorm:"type:uuid;primaryKey" json:"id"`
 	CreatedAt time.Time       `gorm:"not null;index" json:"createdAt"`
+	RequestID string          `gorm:"size:128;index" json:"requestId"`
 	HotelID   *uuid.UUID      `gorm:"type:uuid;index" json:"hotelId,omitempty"`
 	ActorID   *uuid.UUID      `gorm:"type:uuid;index" json:"actorId,omitempty"`
 	ActorType string          `gorm:"size:20;not null;index" json:"actorType"`

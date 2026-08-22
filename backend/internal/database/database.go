@@ -62,6 +62,9 @@ func Migrate(db *gorm.DB) error {
 		{version: "2026082101_identity_tenancy", apply: migrateIdentityTenancy},
 		{version: "2026082102_reservation_lifecycle", apply: migrateReservationLifecycle},
 		{version: "2026082103_service_operations", apply: migrateServiceOperations},
+		{version: "2026082204_revenue_content", apply: migrateRevenueContent},
+		{version: "2026082205_conversations_knowledge", apply: migrateConversationsKnowledge},
+		{version: "2026082206_reporting_hardening", apply: migrateReportingHardening},
 	}
 
 	for _, migration := range migrations {
@@ -79,6 +82,94 @@ func Migrate(db *gorm.DB) error {
 			return tx.Create(&schemaMigration{Version: migration.version, AppliedAt: time.Now().UTC()}).Error
 		}); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func migrateReportingHardening(db *gorm.DB) error {
+	return db.AutoMigrate(&models.AuditLog{})
+}
+
+func migrateConversationsKnowledge(db *gorm.DB) error {
+	if err := db.AutoMigrate(&models.KnowledgeItem{}, &models.Conversation{}, &models.Message{}); err != nil {
+		return err
+	}
+	var hotels []models.Hotel
+	if err := db.Find(&hotels).Error; err != nil {
+		return err
+	}
+	now := time.Now().UTC()
+	for _, hotel := range hotels {
+		var count int64
+		if err := db.Model(&models.KnowledgeItem{}).Where("hotel_id = ?", hotel.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			items := models.DefaultKnowledge(hotel.ID, now)
+			if err := db.Create(&items).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func migrateRevenueContent(db *gorm.DB) error {
+	if err := db.AutoMigrate(&models.Service{}, &models.ServiceRequest{}, &models.Facility{}, &models.Promotion{}, &models.Restaurant{}, &models.MenuItem{}); err != nil {
+		return err
+	}
+	var hotels []models.Hotel
+	if err := db.Find(&hotels).Error; err != nil {
+		return err
+	}
+	for _, hotel := range hotels {
+		for _, service := range models.RevenueServices(hotel.ID) {
+			var count int64
+			if err := db.Model(&models.Service{}).Where("hotel_id = ? AND code = ?", hotel.ID, service.Code).Count(&count).Error; err != nil {
+				return err
+			}
+			if count == 0 {
+				if err := db.Create(&service).Error; err != nil {
+					return err
+				}
+			}
+		}
+		var facilityCount int64
+		if err := db.Model(&models.Facility{}).Where("hotel_id = ?", hotel.ID).Count(&facilityCount).Error; err != nil {
+			return err
+		}
+		if facilityCount == 0 {
+			facilities := models.DefaultFacilities(hotel.ID)
+			if err := db.Create(&facilities).Error; err != nil {
+				return err
+			}
+		}
+		var promotionCount int64
+		if err := db.Model(&models.Promotion{}).Where("hotel_id = ?", hotel.ID).Count(&promotionCount).Error; err != nil {
+			return err
+		}
+		if promotionCount == 0 {
+			promotion := models.DefaultPromotion(hotel.ID, time.Now().UTC())
+			if err := db.Create(&promotion).Error; err != nil {
+				return err
+			}
+		}
+		var restaurantCount int64
+		if err := db.Model(&models.Restaurant{}).Where("hotel_id = ?", hotel.ID).Count(&restaurantCount).Error; err != nil {
+			return err
+		}
+		if restaurantCount == 0 {
+			restaurant, items := models.DefaultRestaurant(hotel.ID)
+			if err := db.Create(&restaurant).Error; err != nil {
+				return err
+			}
+			for index := range items {
+				items[index].RestaurantID = restaurant.ID
+			}
+			if err := db.Create(&items).Error; err != nil {
+				return err
+			}
 		}
 	}
 	return nil

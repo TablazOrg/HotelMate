@@ -3,13 +3,14 @@ import {
   api,
   subscribeRealtime,
   type Hotel,
+  type OperationalReport,
   type Service,
   type ServiceCategory,
   type ServiceRequest,
   type ServiceRequestStatus,
   type Staff,
 } from './api'
-import { formatTime, handoffTheme, mergeRequest, requestStatusMeta, serviceIcon, toFaDigits } from './handoff'
+import { formatPrice, formatTime, handoffTheme, mergeRequest, requestStatusMeta, serviceIcon, toFaDigits } from './handoff'
 
 const statusTabs: { value: Exclude<ServiceRequestStatus, 'cancelled'>; label: string }[] = [
   { value: 'new', label: 'جدید' },
@@ -101,7 +102,7 @@ export function StaffRequestQueue({ token, staff, hotel, onLogout }: { token: st
 
 export function AdminRequestOverview({ token }: { token: string }) {
   const [requests, setRequests] = useState<ServiceRequest[]>([])
-  const [services, setServices] = useState<Service[]>([])
+  const [report, setReport] = useState<OperationalReport | null>(null)
   const [connected, setConnected] = useState(false)
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState('')
@@ -109,12 +110,12 @@ export function AdminRequestOverview({ token }: { token: string }) {
 
   const load = useCallback(async () => {
     try {
-      const [queue, catalog] = await Promise.all([
+      const [queue, reporting] = await Promise.all([
         api<{ requests: ServiceRequest[] }>('/api/v1/staff/requests', {}, token),
-        api<{ services: Service[] }>('/api/v1/staff/services', {}, token),
+        api<{ report: OperationalReport }>('/api/v1/staff/reports/operations', {}, token),
       ])
       setRequests(queue.requests)
-      setServices(catalog.services)
+      setReport(reporting.report)
     } catch (requestError) {
       setError(messageFrom(requestError))
     } finally {
@@ -139,14 +140,12 @@ export function AdminRequestOverview({ token }: { token: string }) {
     finally { setBusy('') }
   }
 
-  const completedToday = requests.filter((request) => request.status === 'completed' && request.completedAt && new Date(request.completedAt).toDateString() === new Date().toDateString())
-  const durations = completedToday.filter((request) => request.startedAt && request.completedAt).map((request) => (Date.parse(request.completedAt!) - Date.parse(request.startedAt!)) / 60000)
-  const average = durations.length ? Math.round(durations.reduce((sum, value) => sum + value, 0) / durations.length) : 0
+  const summary = report?.summary
   const stats = [
-    ['درخواست‌های باز', requests.filter((request) => request.status === 'new' || request.status === 'in_progress').length, connected ? 'زنده و متصل' : 'در حال اتصال'],
-    ['تکمیل‌شده امروز', completedToday.length, average ? `میانگین رسیدگی ${toFaDigits(average)} دقیقه` : 'هنوز داده‌ای نیست'],
-    ['در انتظار شروع', requests.filter((request) => request.status === 'new').length, 'در صف تیم‌های عملیاتی'],
-    ['سرویس‌های فعال', services.filter((service) => service.isActive).length, `از ${toFaDigits(services.length)} سرویس`],
+    ['درخواست‌های باز', summary?.openRequests ?? 0, connected ? 'زنده و متصل' : 'در حال اتصال'],
+    ['تکمیل‌شده امروز', summary?.completedRequests ?? 0, summary?.averageFulfillmentMinutes ? `میانگین رسیدگی ${toFaDigits(summary.averageFulfillmentMinutes)} دقیقه` : 'هنوز داده‌ای نیست'],
+    ['درآمد جانبی امروز', `${formatPrice(summary?.recognizedRevenueCents ?? 0)} تومان`, 'از سفارش‌های پولی'],
+    ['اتاق‌های فعال', summary?.activeRooms ?? 0, `از ${toFaDigits(summary?.totalRooms ?? 0)} اتاق`],
   ] as const
 
   return <div className="admin-overview view-enter">
@@ -160,9 +159,10 @@ export function AdminRequestOverview({ token }: { token: string }) {
 type CatalogForm = {
   name: string; code: string; description: string; category: ServiceCategory
   fulfillmentRole: Service['fulfillmentRole']; estimatedMinutes: string; isQuickAction: boolean
+  isPaid: boolean; priceToman: string; isPreArrival: boolean; availableFrom: string; availableUntil: string
 }
 
-const initialForm: CatalogForm = { name: '', code: '', description: '', category: 'other', fulfillmentRole: 'reception', estimatedMinutes: '20', isQuickAction: false }
+const initialForm: CatalogForm = { name: '', code: '', description: '', category: 'other', fulfillmentRole: 'reception', estimatedMinutes: '20', isQuickAction: false, isPaid: false, priceToman: '', isPreArrival: false, availableFrom: '', availableUntil: '' }
 
 function servicePayload(service: Service) {
   const { id: _id, ...payload } = service
@@ -189,7 +189,7 @@ export function ServiceCatalogPanel({ token, canManage }: { token: string; canMa
     try {
       const icon = ({ housekeeping: 'cleaning', food_beverage: 'coffee', transport: 'car', wellness: 'wellness', other: 'concierge' } as const)[form.category]
       const response = await api<{ service: Service }>('/api/v1/staff/services', { method: 'POST', body: JSON.stringify({
-        ...form, icon, estimatedMinutes: Number(form.estimatedMinutes), priceCents: 0, currency: 'IRR', isPaid: false,
+        ...form, icon, estimatedMinutes: Number(form.estimatedMinutes), priceCents: form.isPaid ? Number(form.priceToman) * 10 : 0, currency: 'IRR',
         sortOrder: (services.length + 1) * 10, isActive: true,
       }) }, token)
       setServices((items) => [...items, response.service]); setForm(initialForm); setShowForm(false)
@@ -213,13 +213,15 @@ export function ServiceCatalogPanel({ token, canManage }: { token: string; canMa
       <div className="form-row"><label>نام سرویس<input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} required /></label><label>کد انگلیسی<input dir="ltr" pattern="[a-z0-9]+(?:-[a-z0-9]+)*" value={form.code} onChange={(event) => setForm({ ...form, code: event.target.value.toLowerCase() })} placeholder="extra-towel" required /></label></div>
       <label>توضیح<input value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} /></label>
       <div className="form-row"><label>دسته<select value={form.category} onChange={(event) => setForm({ ...form, category: event.target.value as ServiceCategory })}>{Object.entries(categoryLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>تیم مسئول<select value={form.fulfillmentRole} onChange={(event) => setForm({ ...form, fulfillmentRole: event.target.value as Service['fulfillmentRole'] })}><option value="reception">پذیرش</option><option value="housekeeping">خانه‌داری</option><option value="food_beverage">غذا و نوشیدنی</option></select></label></div>
-      <div className="form-row"><label>زمان تقریبی (دقیقه)<input type="number" min="1" max="1440" value={form.estimatedMinutes} onChange={(event) => setForm({ ...form, estimatedMinutes: event.target.value })} required /></label><label className="check-label"><input type="checkbox" checked={form.isQuickAction} onChange={(event) => setForm({ ...form, isQuickAction: event.target.checked })} /> نمایش در دسترسی سریع</label></div>
-      <p className="form-context">سرویس پولی و پرداخت در Milestone 4 فعال می‌شود؛ این فرم سرویس رایگان می‌سازد.</p>
+      <div className="form-row"><label>زمان تقریبی (دقیقه)<input type="number" min="1" max="1440" value={form.estimatedMinutes} onChange={(event) => setForm({ ...form, estimatedMinutes: event.target.value })} required /></label><label>قیمت (تومان)<input type="number" min="0" disabled={!form.isPaid} value={form.priceToman} onChange={(event) => setForm({ ...form, priceToman: event.target.value })} required={form.isPaid} /></label></div>
+      <div className="catalog-checks"><label className="check-label"><input type="checkbox" checked={form.isQuickAction} onChange={(event) => setForm({ ...form, isQuickAction: event.target.checked })} /> نمایش در دسترسی سریع</label><label className="check-label"><input type="checkbox" checked={form.isPaid} onChange={(event) => setForm({ ...form, isPaid: event.target.checked, isPreArrival: event.target.checked ? form.isPreArrival : false })} /> سرویس پولی</label><label className="check-label"><input type="checkbox" disabled={!form.isPaid} checked={form.isPreArrival} onChange={(event) => setForm({ ...form, isPreArrival: event.target.checked })} /> قابل سفارش پیش از ورود</label></div>
+      <div className="form-row"><label>فعال از ساعت<input type="time" value={form.availableFrom} onChange={(event) => setForm({ ...form, availableFrom: event.target.value })} /></label><label>فعال تا ساعت<input type="time" value={form.availableUntil} onChange={(event) => setForm({ ...form, availableUntil: event.target.value })} /></label></div>
+      <p className="form-context">پرداخت آنلاین عمداً غیرفعال است؛ سفارش پولی با پرداخت در محل ثبت می‌شود.</p>
       <button className="primary-button" disabled={busy === 'create'}>{busy === 'create' ? 'در حال ایجاد…' : 'ایجاد سرویس'}</button>
     </form>}
     {error && <div className="inline-alert error">{error}</div>}
     <div className="catalog-admin-list">
-      {services.map((service) => <article key={service.id} className={!service.isActive ? 'inactive' : ''}><span className="service-icon"><i className={serviceIcon(service)} /></span><div><strong>{service.name}</strong><small>{categoryLabels[service.category]} · تحویل تا {toFaDigits(service.estimatedMinutes)} دقیقه{service.isQuickAction ? ' · دسترسی سریع' : ''}</small></div><span className={`status-pill ${service.isActive ? 'success' : ''}`}>{service.isActive ? 'فعال' : 'غیرفعال'}</span>{canManage && <button type="button" className="small-button" disabled={busy === service.id} onClick={() => void toggle(service)}>{busy === service.id ? '…' : service.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}</button>}</article>)}
+      {services.map((service) => <article key={service.id} className={!service.isActive ? 'inactive' : ''}><span className="service-icon"><i className={serviceIcon(service)} /></span><div><strong>{service.name}</strong><small>{categoryLabels[service.category]} · {service.isPaid ? `${toFaDigits(Math.round(service.priceCents / 10).toLocaleString('fa-IR'))} تومان` : `تحویل تا ${toFaDigits(service.estimatedMinutes)} دقیقه`}{service.isQuickAction ? ' · دسترسی سریع' : ''}{service.isPreArrival ? ' · پیش از ورود' : ''}</small></div><span className={`status-pill ${service.isActive ? 'success' : ''}`}>{service.isActive ? 'فعال' : 'غیرفعال'}</span>{canManage && <button type="button" className="small-button" disabled={busy === service.id} onClick={() => void toggle(service)}>{busy === service.id ? '…' : service.isActive ? 'غیرفعال‌سازی' : 'فعال‌سازی'}</button>}</article>)}
       {!services.length && !loading && <div className="empty-state">هنوز سرویسی ثبت نشده است.</div>}
     </div>
   </div>
