@@ -164,7 +164,7 @@ jobs:
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=${RELEASE_VERSION} -X main.commit=${RELEASE_SHA} -X main.buildDate=${build_date}" -o ../release/hotelmate-linux-amd64 ./cmd/hotelmate
           migrations="$(go run ./cmd/hotelmate --json version | jq -c '.data.migrations')"
           cd ..
-          sha256sum release/hotelmate-linux-amd64 > release/hotelmate-linux-amd64.sha256
+          (cd release && sha256sum hotelmate-linux-amd64 > hotelmate-linux-amd64.sha256)
           cp api.spdx.json web.spdx.json release/
           jq -n \
             --arg schemaVersion 'hotelmate.release/v1' \
@@ -175,7 +175,7 @@ jobs:
             --arg webImage "$WEB_REF" \
             --argjson migrations "$migrations" \
             --arg emergency "$EMERGENCY" \
-            '{schemaVersion:$schemaVersion,releaseVersion:$releaseVersion,commit:$commit,createdAt:$createdAt,apiImage:$apiImage,webImage:$webImage,migrations:$migrations,sboms:{api:"api.spdx.json",web:"web.spdx.json"},evidence:{ciRun:env.GITHUB_RUN_ID,emergency:($emergency=="true")}}' \
+            '{schemaVersion:$schemaVersion,releaseVersion:$releaseVersion,commit:$commit,createdAt:$createdAt,apiImage:$apiImage,webImage:$webImage,migrations:$migrations,sboms:{api:"api.spdx.json",web:"web.spdx.json"},evidence:{ciRun:env.GITHUB_RUN_ID,ciWorkflow:"CI",ciConclusion:"success",dependencySecretLicenseIaCScan:"passed",apiImageScan:"passed",webImageScan:"passed",provenance:"published",signaturesAndAttestations:"verified",emergency:($emergency=="true")}}' \
             > release/release.json
       - name: Upload immutable release bundle
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -221,10 +221,10 @@ jobs:
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"
-          scp release/release.json release/hotelmate-linux-amd64 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
+          scp release/release.json release/hotelmate-linux-amd64 release/hotelmate-linux-amd64.sha256 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && chmod 700 incoming/hotelmate-linux-amd64 && incoming/hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH/incoming' && sha256sum -c hotelmate-linux-amd64.sha256 && chmod 700 hotelmate-linux-amd64 && ./hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
       - name: Run staging acceptance and authenticated smoke
         env:
           ACCEPTANCE_ONBOARDING_TOKEN: ${{ secrets.ACCEPTANCE_ONBOARDING_TOKEN }}
@@ -273,10 +273,10 @@ jobs:
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"
-          scp release/release.json release/hotelmate-linux-amd64 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
+          scp release/release.json release/hotelmate-linux-amd64 release/hotelmate-linux-amd64.sha256 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && chmod 700 incoming/hotelmate-linux-amd64 && incoming/hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH/incoming' && sha256sum -c hotelmate-linux-amd64.sha256 && chmod 700 hotelmate-linux-amd64 && ./hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
       - name: Verify production public and authenticated paths
         env:
           SMOKE_HOTEL_SLUG: ${{ secrets.SMOKE_HOTEL_SLUG }}

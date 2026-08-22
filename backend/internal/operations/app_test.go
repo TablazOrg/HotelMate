@@ -14,6 +14,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/TablazOrg/HotelMate/backend/internal/database"
 )
 
 type executorFunc func(context.Context, string, []string, []string, io.Reader, io.Writer, io.Writer) error
@@ -54,10 +56,13 @@ func TestConfigPrecedenceAndSecretRedaction(t *testing.T) {
 		t.Fatal(err)
 	}
 	environment := map[string]string{
-		"DATABASE_URL":     "postgres://env-user:env-secret@env-db/hotelmate",
-		"JWT_SECRET":       "env-jwt-secret-that-is-longer-than-thirty-two-characters",
-		"ONBOARDING_TOKEN": "env-onboarding-secret-long-enough",
-		"ALLOWED_ORIGINS":  "https://env.example.com",
+		"DATABASE_URL":         "postgres://env-user:env-secret@env-db/hotelmate",
+		"JWT_SECRET":           "env-jwt-secret-that-is-longer-than-thirty-two-characters",
+		"ONBOARDING_TOKEN":     "env-onboarding-secret-long-enough",
+		"ALLOWED_ORIGINS":      "https://env.example.com",
+		"SMOKE_HOTEL_SLUG":     "smoke-hotel",
+		"SMOKE_STAFF_EMAIL":    "smoke@example.com",
+		"SMOKE_STAFF_PASSWORD": "smoke-password",
 	}
 	var stdout, stderr bytes.Buffer
 	app := NewApp(&stdout, &stderr)
@@ -68,7 +73,7 @@ func TestConfigPrecedenceAndSecretRedaction(t *testing.T) {
 		t.Fatalf("exit code = %d, stderr=%s", code, stderr.String())
 	}
 	combined := stdout.String() + stderr.String()
-	for _, secret := range []string{"file-secret", "env-secret", "flag-secret", environment["JWT_SECRET"], environment["ONBOARDING_TOKEN"]} {
+	for _, secret := range []string{"file-secret", "env-secret", "flag-secret", environment["JWT_SECRET"], environment["ONBOARDING_TOKEN"], environment["SMOKE_STAFF_PASSWORD"]} {
 		if strings.Contains(combined, secret) {
 			t.Fatalf("output leaked secret %q: %s", secret, combined)
 		}
@@ -125,6 +130,7 @@ func TestMutationsRequireConfirmationBeforeExternalAccess(t *testing.T) {
 		{"migrate", "up"},
 		{"backup", "create"},
 		{"backup", "restore"},
+		{"backup", "drill"},
 		{"retention", "purge-documents"},
 		{"retention", "purge-messages"},
 		{"deploy", "apply"},
@@ -159,11 +165,13 @@ func TestBackupVerificationAndChecksumFailure(t *testing.T) {
 	}
 	manifestPath := filepath.Join(directory, "hotelmate-20260822T120000Z.json")
 	manifest := recoverySet{
-		SchemaVersion: recoverySchemaVersion,
-		ID:            "hotelmate-20260822T120000Z",
-		CreatedAt:     time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
-		Environment:   "production",
-		Database:      artifact,
+		SchemaVersion:  recoverySchemaVersion,
+		ID:             "hotelmate-20260822T120000Z",
+		CreatedAt:      time.Date(2026, 8, 22, 12, 0, 0, 0, time.UTC),
+		Environment:    "production",
+		ReleaseVersion: "0.7.0-test",
+		Database:       artifact,
+		Migrations:     []database.MigrationStatus{{Version: "test", Applied: true}},
 	}
 	if err := writeJSONAtomic(manifestPath, manifest, 0o600); err != nil {
 		t.Fatal(err)
@@ -230,6 +238,22 @@ func TestJobMetricFailurePreservesLastSuccess(t *testing.T) {
 	} {
 		if !strings.Contains(text, expected) {
 			t.Fatalf("metric output missing %q:\n%s", expected, text)
+		}
+	}
+}
+
+func TestMergeEnvironmentReplacesSecretsInsteadOfDuplicatingThem(t *testing.T) {
+	merged := mergeEnvironment(
+		[]string{"PGPASSWORD=old-secret", "PATH=/usr/bin", "PGPASSWORD=older-secret"},
+		[]string{"PGPASSWORD=new-secret", "RESTIC_PASSWORD=restic-secret"},
+	)
+	joined := strings.Join(merged, "\n")
+	if strings.Contains(joined, "old-secret") || strings.Count(joined, "PGPASSWORD=") != 1 {
+		t.Fatalf("base secret was not replaced: %q", joined)
+	}
+	for _, expected := range []string{"PATH=/usr/bin", "PGPASSWORD=new-secret", "RESTIC_PASSWORD=restic-secret"} {
+		if !strings.Contains(joined, expected) {
+			t.Fatalf("merged environment missing %q: %q", expected, joined)
 		}
 	}
 }

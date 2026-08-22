@@ -11,6 +11,14 @@
     "2026082103_service_operations",
     "2026082204_revenue_content",
     "2026082205_conversations_knowledge",
-    "2026082206_reporting_hardening"
-  ]
+    "2026082206_reporting_hardening",
+    "2026082207_query_observability"
+  ],
+  "sboms": {
+    "api": "local-build-not-published",
+    "web": "local-build-not-published"
+  },
+  "evidence": {
+    "localValidation": "Go, frontend, Compose, smoke, acceptance, backup, restore, and rollback checks"
+  }
 }

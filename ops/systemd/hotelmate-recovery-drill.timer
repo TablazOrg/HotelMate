@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the HotelMate isolated recovery drill monthly
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=6h
+Persistent=true
+Unit=hotelmate-recovery-drill.service
+
+[Install]
+WantedBy=timers.target

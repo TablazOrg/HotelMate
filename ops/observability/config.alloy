@@ -22,7 +22,27 @@ loki.source.docker "hotelmate" {
   host       = "unix:///var/run/docker.sock"
   targets    = discovery.relabel.hotelmate.output
   labels     = { environment = sys.env("HOTELMATE_ENVIRONMENT") }
+  forward_to = [loki.process.hotelmate.receiver]
+}
+
+loki.process "hotelmate" {
   forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      request_id = "requestId",
+      level      = "level",
+      status     = "status",
+    }
+  }
+
+  // Request IDs remain searchable structured metadata instead of
+  // high-cardinality stream labels.
+  stage.structured_metadata {
+    values = {
+      request_id = "",
+    }
+  }
 }
 
 loki.write "local" {

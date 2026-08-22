@@ -3,17 +3,25 @@ package operations
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
+	"regexp"
+	"slices"
 	"strings"
+	"syscall"
 	"time"
+
+	"github.com/TablazOrg/HotelMate/backend/internal/database"
 )
 
 const releaseSchemaVersion = "hotelmate.release/v1"
+
+var immutableImageReference = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._:/-]*@sha256:[a-f0-9]{64}$`)
 
 type releaseManifest struct {
 	SchemaVersion  string            `json:"schemaVersion"`
@@ -96,8 +104,11 @@ func readReleaseManifest(path string) (releaseManifest, error) {
 	if err := decoder.Decode(&release); err != nil {
 		return releaseManifest{}, failure(ExitInvalid, "release manifest is invalid", err)
 	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return releaseManifest{}, failure(ExitInvalid, "release manifest must contain one JSON document", err)
+	}
 	release.Source, _ = filepath.Abs(path)
-	if release.SchemaVersion != releaseSchemaVersion || release.ReleaseVersion == "" || release.Commit == "" || release.APIImage == "" || release.WebImage == "" {
+	if release.SchemaVersion != releaseSchemaVersion || release.ReleaseVersion == "" || release.Commit == "" || release.CreatedAt.IsZero() || release.APIImage == "" || release.WebImage == "" || len(release.Migrations) == 0 || release.SBOMs["api"] == "" || release.SBOMs["web"] == "" || len(release.Evidence) == 0 {
 		return releaseManifest{}, failure(ExitInvalid, "release manifest is incomplete or has an unsupported schema", nil)
 	}
 	return release, nil
@@ -119,10 +130,20 @@ func (a *App) deployPreflight(ctx context.Context, config resolvedConfig, releas
 	_, composeErr := os.Stat(config.ComposeFile)
 	add("compose-file", composeErr, "available")
 	if config.Environment == "staging" || config.Environment == "production" {
-		if !strings.Contains(release.APIImage, "@sha256:") || !strings.Contains(release.WebImage, "@sha256:") {
+		if !immutableImageReference.MatchString(release.APIImage) || !immutableImageReference.MatchString(release.WebImage) {
 			add("immutable-images", fmt.Errorf("staging/production images must be digest references"), "")
 		} else {
 			add("immutable-images", nil, "digest pinned")
+		}
+		if !slices.Equal(release.Migrations, database.MigrationVersions()) {
+			add("migration-set", fmt.Errorf("release migration set does not match the operations binary"), "")
+		} else {
+			add("migration-set", nil, "matches operations binary")
+		}
+		if release.SBOMs["api"] == "" || release.SBOMs["web"] == "" || len(release.Evidence) == 0 {
+			add("release-evidence", fmt.Errorf("SBOM and CI evidence are required"), "")
+		} else {
+			add("release-evidence", nil, "SBOM and CI evidence recorded")
 		}
 		info, err := os.Stat(config.EnvFile)
 		if err == nil && info.Mode().Perm()&0o077 != 0 {
@@ -379,14 +400,118 @@ func acquireEnvironmentLock(directory, environment string) (func(), error) {
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil, failure(ExitPrecondition, "create deployment lock directory failed", err)
 	}
-	path := filepath.Join(directory, "."+environment+".lock")
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil, failure(ExitPrecondition, "another deploy, migration, or restore operation holds the environment lock", err)
+	if err := os.Chmod(directory, 0o700); err != nil {
+		return nil, failure(ExitPrecondition, "protect deployment lock directory failed", err)
 	}
-	_, _ = file.WriteString(strconv.Itoa(os.Getpid()) + "\n")
+	path := filepath.Join(directory, "."+environment+".lock")
+	file, err := createEnvironmentLock(path)
+	if err != nil {
+		if !os.IsExist(err) {
+			return nil, failure(ExitPrecondition, "create environment lock failed", err)
+		}
+		stale, staleErr := archiveStaleEnvironmentLock(path)
+		if staleErr != nil {
+			return nil, failure(ExitPrecondition, "another deploy, migration, restore, or recovery drill holds the environment lock", staleErr)
+		}
+		if !stale {
+			return nil, failure(ExitPrecondition, "another deploy, migration, restore, or recovery drill holds the environment lock", err)
+		}
+		file, err = createEnvironmentLock(path)
+		if err != nil {
+			return nil, failure(ExitPrecondition, "acquire environment lock after archiving a stale owner failed", err)
+		}
+	}
+	var owner environmentLock
+	if _, err := file.Seek(0, 0); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return nil, failure(ExitPrecondition, "read environment lock ownership failed", err)
+	}
+	if err := json.NewDecoder(file).Decode(&owner); err != nil {
+		_ = file.Close()
+		_ = os.Remove(path)
+		return nil, failure(ExitPrecondition, "read environment lock ownership failed", err)
+	}
 	_ = file.Close()
-	return func() { _ = os.Remove(path) }, nil
+	return func() {
+		current, err := readEnvironmentLock(path)
+		if err == nil && current.Token == owner.Token {
+			_ = os.Remove(path)
+		}
+	}, nil
+}
+
+type environmentLock struct {
+	PID       int       `json:"pid"`
+	Hostname  string    `json:"hostname"`
+	CreatedAt time.Time `json:"createdAt"`
+	Token     string    `json:"token"`
+}
+
+func createEnvironmentLock(path string) (*os.File, error) {
+	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, err
+	}
+	failed := true
+	defer func() {
+		if failed {
+			_ = file.Close()
+			_ = os.Remove(path)
+		}
+	}()
+	hostname, _ := os.Hostname()
+	random := make([]byte, 16)
+	if _, err := rand.Read(random); err != nil {
+		return nil, err
+	}
+	owner := environmentLock{PID: os.Getpid(), Hostname: hostname, CreatedAt: time.Now().UTC(), Token: hex.EncodeToString(random)}
+	encoder := json.NewEncoder(file)
+	if err := encoder.Encode(owner); err != nil {
+		return nil, err
+	}
+	if err := file.Sync(); err != nil {
+		return nil, err
+	}
+	failed = false
+	return file, nil
+}
+
+func readEnvironmentLock(path string) (environmentLock, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return environmentLock{}, err
+	}
+	defer file.Close()
+	var owner environmentLock
+	if err := json.NewDecoder(io.LimitReader(file, 4096)).Decode(&owner); err != nil {
+		return environmentLock{}, err
+	}
+	if owner.PID <= 0 || owner.Hostname == "" || owner.Token == "" || owner.CreatedAt.IsZero() {
+		return environmentLock{}, fmt.Errorf("lock ownership metadata is incomplete")
+	}
+	return owner, nil
+}
+
+func archiveStaleEnvironmentLock(path string) (bool, error) {
+	owner, err := readEnvironmentLock(path)
+	if err != nil {
+		return false, fmt.Errorf("existing lock cannot be verified safely: %w", err)
+	}
+	hostname, _ := os.Hostname()
+	if owner.Hostname != hostname {
+		return false, fmt.Errorf("lock belongs to host %s and requires operator review", owner.Hostname)
+	}
+	if err := syscall.Kill(owner.PID, 0); err == nil || err == syscall.EPERM {
+		return false, nil
+	} else if err != syscall.ESRCH {
+		return false, fmt.Errorf("check lock owner process %d: %w", owner.PID, err)
+	}
+	archive := path + ".stale." + time.Now().UTC().Format("20060102T150405.000000000Z")
+	if err := os.Rename(path, archive); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func writeDeploymentEvidence(directory string, evidence deploymentEvidence) error {

@@ -192,6 +192,17 @@ func (a *App) validateConfig(config resolvedConfig) (any, error) {
 	if config.PostgresDriver != "direct" && config.PostgresDriver != "compose" {
 		return nil, failure(ExitInvalid, "HOTELMATE_POSTGRES_DRIVER must be direct or compose", nil)
 	}
+	if config.Environment == "staging" || config.Environment == "production" {
+		missing := make([]string, 0, 3)
+		for _, key := range []string{"SMOKE_HOTEL_SLUG", "SMOKE_STAFF_EMAIL", "SMOKE_STAFF_PASSWORD"} {
+			if config.lookup(key) == "" {
+				missing = append(missing, key)
+			}
+		}
+		if len(missing) > 0 {
+			return nil, failure(ExitInvalid, "authenticated smoke configuration is incomplete: "+strings.Join(missing, ", "), nil)
+		}
+	}
 	return map[string]any{
 		"environment": config.Environment, "databaseConfigured": config.DatabaseURL != "", "uploadsDir": config.UploadsDir,
 		"backupDir": config.BackupDir, "baseURL": config.BaseURL, "offHostBackupConfigured": config.ResticRepository != "",

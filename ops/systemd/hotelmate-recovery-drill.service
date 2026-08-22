@@ -1,0 +1,19 @@
+[Unit]
+Description=HotelMate isolated recovery drill with measured RPO and RTO
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/hotelmate/recovery-drill.env
+
+[Service]
+Type=oneshot
+User=hotelmate
+Group=hotelmate
+WorkingDirectory=/srv/hotelmate
+ExecStart=/usr/local/bin/hotelmate --config /etc/hotelmate/recovery-drill.env backup drill --yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/hotelmate-private /srv/hotelmate-drill /var/lib/node_exporter/textfile_collector
+UMask=0077
+TimeoutStartSec=4h

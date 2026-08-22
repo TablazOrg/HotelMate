@@ -9,7 +9,18 @@
     { "type": "timeseries", "title": "Active WebSockets", "id": 5, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 }, "targets": [{ "expr": "hotelmate_websocket_connections", "refId": "A" }] },
     { "type": "stat", "title": "Backup age (hours)", "id": 6, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 }, "targets": [{ "expr": "(time() - hotelmate_job_last_success_timestamp_seconds{job=\"backup\"}) / 3600", "refId": "A" }] },
     { "type": "timeseries", "title": "Host disk free", "id": 7, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }, "targets": [{ "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"}", "legendFormat": "{{mountpoint}}", "refId": "A" }] },
-    { "type": "timeseries", "title": "PostgreSQL connections", "id": 8, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "expr": "pg_stat_activity_count", "legendFormat": "{{state}}", "refId": "A" }] }
+    { "type": "timeseries", "title": "PostgreSQL connections", "id": 8, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "expr": "pg_stat_activity_count", "legendFormat": "{{state}}", "refId": "A" }] },
+    { "type": "table", "title": "Running release identity", "id": 9, "gridPos": { "h": 6, "w": 12, "x": 0, "y": 24 }, "targets": [{ "expr": "hotelmate_build_info", "instant": true, "refId": "A" }] },
+    { "type": "timeseries", "title": "Authentication failures", "id": 10, "gridPos": { "h": 6, "w": 12, "x": 12, "y": 24 }, "targets": [{ "expr": "sum by (status) (rate(hotelmate_http_requests_total{pattern=~\".*/auth/.*\",status=~\"401|403\"}[5m]))", "legendFormat": "{{status}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "API p99 latency", "id": 11, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 30 }, "targets": [{ "expr": "histogram_quantile(0.99, sum by (le) (rate(hotelmate_http_request_duration_seconds_bucket[5m])))", "refId": "A" }] },
+    { "type": "timeseries", "title": "Host CPU and available memory", "id": 12, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 30 }, "targets": [{ "expr": "1 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))", "legendFormat": "CPU used", "refId": "A" }, { "expr": "node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes", "legendFormat": "Memory available", "refId": "B" }] },
+    { "type": "stat", "title": "Operation last-run status", "id": 13, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 30 }, "targets": [{ "expr": "hotelmate_job_last_run_success", "legendFormat": "{{job}}", "refId": "A" }] },
+    { "type": "stat", "title": "Restore drill age (days)", "id": 14, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 38 }, "targets": [{ "expr": "(time() - hotelmate_job_last_success_timestamp_seconds{job=\"restore_drill\"}) / 86400", "refId": "A" }] },
+    { "type": "timeseries", "title": "Mean PostgreSQL statement latency", "id": 15, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 38 }, "targets": [{ "expr": "sum(rate(pg_stat_statements_seconds_total[5m])) / clamp_min(sum(rate(pg_stat_statements_calls_total[5m])), 0.001)", "refId": "A" }] },
+    { "type": "gauge", "title": "PostgreSQL connection utilization", "id": 16, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 38 }, "targets": [{ "expr": "sum(pg_stat_activity_count) / clamp_min(max(pg_settings_max_connections), 1)", "refId": "A" }] },
+    { "type": "timeseries", "title": "PostgreSQL storage growth", "id": 17, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 46 }, "targets": [{ "expr": "sum(deriv(container_fs_usage_bytes{name=~\".*postgres.*\"}[6h])) * 86400", "legendFormat": "bytes/day", "refId": "A" }] },
+    { "type": "timeseries", "title": "Container restarts", "id": 18, "gridPos": { "h": 8, "w": 6, "x": 12, "y": 46 }, "targets": [{ "expr": "changes(container_start_time_seconds{name=~\".*(api|web|postgres).*\"}[1h])", "legendFormat": "{{name}}", "refId": "A" }] },
+    { "type": "stat", "title": "Central log pipeline", "id": 19, "gridPos": { "h": 8, "w": 6, "x": 18, "y": 46 }, "targets": [{ "expr": "up{job=\"loki\"}", "refId": "A" }] }
   ],
   "schemaVersion": 41,
   "tags": ["hotelmate", "operations"],
@@ -18,5 +29,5 @@
   "timezone": "browser",
   "title": "HotelMate platform operations",
   "uid": "hotelmate-platform",
-  "version": 1
+  "version": 2
 }

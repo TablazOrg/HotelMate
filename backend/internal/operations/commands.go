@@ -190,7 +190,7 @@ func (a *App) doctor(ctx context.Context, config resolvedConfig) (any, error) {
 	var diagnostic bytes.Buffer
 	err = a.Executor.Run(ctx, "docker", composeArgs, nil, nil, ioDiscard{}, &diagnostic)
 	if err != nil && diagnostic.Len() > 0 {
-		err = fmt.Errorf("%s", strings.TrimSpace(diagnostic.String()))
+		err = sanitizedToolError(err, diagnostic.String())
 	}
 	add("compose", err, "configuration valid")
 

@@ -59,11 +59,29 @@ type OSExecutor struct{}
 
 func (OSExecutor) Run(ctx context.Context, name string, args []string, env []string, stdin io.Reader, stdout, stderr io.Writer) error {
 	command := exec.CommandContext(ctx, name, args...)
-	command.Env = append(os.Environ(), env...)
+	command.Env = mergeEnvironment(os.Environ(), env)
 	command.Stdin = stdin
 	command.Stdout = stdout
 	command.Stderr = stderr
 	return command.Run()
+}
+
+func mergeEnvironment(base, overrides []string) []string {
+	keys := make(map[string]struct{}, len(overrides))
+	for _, item := range overrides {
+		if key, _, ok := strings.Cut(item, "="); ok {
+			keys[key] = struct{}{}
+		}
+	}
+	merged := make([]string, 0, len(base)+len(overrides))
+	for _, item := range base {
+		key, _, ok := strings.Cut(item, "=")
+		if _, replaced := keys[key]; ok && replaced {
+			continue
+		}
+		merged = append(merged, item)
+	}
+	return append(merged, overrides...)
 }
 
 type App struct {
@@ -164,6 +182,8 @@ func metricJob(path []string, options cliOptions) string {
 		return "backup"
 	case "backup restore":
 		return "restore"
+	case "backup drill":
+		return "restore_drill"
 	case "retention purge-documents":
 		return "purge_documents"
 	case "retention purge-messages":
@@ -230,7 +250,7 @@ Usage:
   hotelmate [global flags] doctor
   hotelmate [global flags] config validate
   hotelmate [global flags] migrate status|up [--dry-run]
-  hotelmate [global flags] backup create|list|verify|restore
+  hotelmate [global flags] backup create|list|verify|restore|drill
   hotelmate [global flags] retention purge-documents|purge-messages
   hotelmate [global flags] deploy preflight|apply|status|rollback
   hotelmate [global flags] smoke
@@ -250,6 +270,8 @@ Global flags:
   --release-file PATH          immutable release manifest
   --evidence-dir PATH          deployment evidence directory
   --manifest PATH              backup manifest for verify/restore
+  --requested-recovery-point  RFC3339 point used to measure drill RPO
+  --operator NAME             recovery-drill operator identity
   --yes, --confirm             authorize a mutating command
   --dry-run                    report planned migration/deployment work
 `

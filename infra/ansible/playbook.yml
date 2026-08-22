@@ -4,15 +4,49 @@
   become: true
   vars:
     hotelmate_source_root: "{{ playbook_dir }}/../.."
-  vars_files:
-    - group_vars/all.yml
-    - group_vars/all/vault.yml
   pre_tasks:
     - name: Refuse an unapproved alert receiver in production
       ansible.builtin.assert:
         that:
           - hotelmate_environment != 'production' or (hotelmate_alert_receiver_configured | bool and hotelmate_alertmanager_config is defined)
         fail_msg: Production requires an approved Alertmanager receiver and escalation owner.
+
+    - name: Require a dedicated recovery-drill configuration when scheduling drills
+      ansible.builtin.assert:
+        that:
+          - hotelmate_recovery_drill_env is defined
+        fail_msg: Scheduled drills require a Vault-protected, isolated recovery-drill environment.
+      when: hotelmate_recovery_drill_enabled | default(false) | bool
+
+    - name: Calculate the release CLI checksum on the controller
+      ansible.builtin.stat:
+        path: "{{ hotelmate_cli_artifact }}"
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: hotelmate_cli_artifact_stat
+
+    - name: Verify the release CLI against its trusted checksum
+      ansible.builtin.assert:
+        that:
+          - hotelmate_cli_artifact_stat.stat.exists
+          - hotelmate_cli_artifact_stat.stat.checksum == hotelmate_cli_sha256
+        fail_msg: The operations CLI does not match the approved release checksum.
+
+    - name: Calculate the cosign checksum on the controller
+      ansible.builtin.stat:
+        path: "{{ hotelmate_cosign_artifact }}"
+        checksum_algorithm: sha256
+      delegate_to: localhost
+      become: false
+      register: hotelmate_cosign_artifact_stat
+
+    - name: Verify cosign against its trusted checksum
+      ansible.builtin.assert:
+        that:
+          - hotelmate_cosign_artifact_stat.stat.exists
+          - hotelmate_cosign_artifact_stat.stat.checksum == hotelmate_cosign_sha256
+        fail_msg: Cosign does not match the approved upstream checksum.
 
   tasks:
     - name: Install host security and operations packages
@@ -93,6 +127,8 @@
         - { path: "{{ hotelmate_private_root }}/uploads", mode: "0700" }
         - { path: /etc/hotelmate, mode: "0700" }
         - { path: /var/lib/node_exporter/textfile_collector, mode: "0750" }
+        - { path: /srv/hotelmate-drill, mode: "0700" }
+        - { path: /srv/hotelmate-drill/uploads, mode: "0700" }
 
     - name: Install protected HotelMate environment
       ansible.builtin.copy:
@@ -101,6 +137,25 @@
         group: "{{ hotelmate_deploy_user }}"
         mode: "0600"
         content: "{{ hotelmate_production_env }}"
+      no_log: true
+
+    - name: Configure bounded Docker JSON logs
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: "0644"
+        content: "{{ hotelmate_docker_daemon_config | to_nice_json }}\n"
+      notify: Restart Docker
+
+    - name: Install protected isolated recovery-drill environment
+      ansible.builtin.copy:
+        dest: /etc/hotelmate/recovery-drill.env
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0600"
+        content: "{{ hotelmate_recovery_drill_env }}"
+      when: hotelmate_recovery_drill_enabled | default(false) | bool
       no_log: true
 
     - name: Install versioned Compose definitions
@@ -169,6 +224,8 @@
         - hotelmate-purge-documents.timer
         - hotelmate-purge-messages.service
         - hotelmate-purge-messages.timer
+        - hotelmate-recovery-drill.service
+        - hotelmate-recovery-drill.timer
       notify: Reload systemd
 
     - name: Enable scheduled backup and privacy-retention jobs
@@ -182,6 +239,14 @@
         - hotelmate-purge-documents.timer
         - hotelmate-purge-messages.timer
 
+    - name: Enable scheduled isolated recovery drills after owner approval
+      ansible.builtin.systemd_service:
+        name: hotelmate-recovery-drill.timer
+        enabled: true
+        state: started
+        daemon_reload: true
+      when: hotelmate_recovery_drill_enabled | default(false) | bool
+
     - name: Enable unattended security upgrades
       ansible.builtin.copy:
         dest: /etc/apt/apt.conf.d/20auto-upgrades
@@ -193,7 +258,7 @@
           APT::Periodic::Unattended-Upgrade "1";
           APT::Periodic::AutocleanInterval "7";
 
-    - name: Enable Docker, fail2ban, and time synchronization
+    - name: Enable Docker, fail2ban, certificate renewal, and time synchronization
       ansible.builtin.service:
         name: "{{ item }}"
         enabled: true
@@ -201,6 +266,7 @@
       loop:
         - docker
         - fail2ban
+        - certbot.timer
         - systemd-timesyncd
 
   handlers:
@@ -212,3 +278,8 @@
     - name: Reload systemd
       ansible.builtin.systemd_service:
         daemon_reload: true
+
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted

@@ -40,6 +40,7 @@ var migrationSteps = []migrationStep{
 	{version: "2026082204_revenue_content", apply: migrateRevenueContent},
 	{version: "2026082205_conversations_knowledge", apply: migrateConversationsKnowledge},
 	{version: "2026082206_reporting_hardening", apply: migrateReportingHardening},
+	{version: "2026082207_query_observability", apply: migrateQueryObservability},
 }
 
 func MigrationVersions() []string {
@@ -177,6 +178,13 @@ func widenMigrationLedgerVersion(db *gorm.DB) error {
 
 func migrateReportingHardening(db *gorm.DB) error {
 	return db.AutoMigrate(&models.AuditLog{})
+}
+
+func migrateQueryObservability(db *gorm.DB) error {
+	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_stat_statements").Error; err != nil {
+		return fmt.Errorf("enable pg_stat_statements: %w", err)
+	}
+	return nil
 }
 
 func migrateConversationsKnowledge(db *gorm.DB) error {

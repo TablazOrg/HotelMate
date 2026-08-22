@@ -13,6 +13,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -22,6 +23,8 @@ import (
 )
 
 const recoverySchemaVersion = "hotelmate.recovery-set/v1"
+
+var recoverySetID = regexp.MustCompile(`^hotelmate-[0-9]{8}T[0-9]{6}Z$`)
 
 type recoveryArtifact struct {
 	File   string `json:"file"`
@@ -45,7 +48,7 @@ type recoverySet struct {
 
 func (a *App) backup(ctx context.Context, config resolvedConfig, path []string, options cliOptions) (any, error) {
 	if len(path) != 2 {
-		return nil, failure(ExitInvalid, "usage: hotelmate backup create|list|verify|restore", nil)
+		return nil, failure(ExitInvalid, "usage: hotelmate backup create|list|verify|restore|drill", nil)
 	}
 	switch path[1] {
 	case "create":
@@ -75,8 +78,13 @@ func (a *App) backup(ctx context.Context, config resolvedConfig, path []string, 
 		}
 		defer releaseLock()
 		return a.restoreBackup(ctx, config, manifest)
+	case "drill":
+		if !options.yes {
+			return nil, failure(ExitPrecondition, fmt.Sprintf("recovery drill in %s requires --yes", config.Environment), nil)
+		}
+		return a.recoveryDrill(ctx, config)
 	default:
-		return nil, failure(ExitInvalid, "usage: hotelmate backup create|list|verify|restore", nil)
+		return nil, failure(ExitInvalid, "usage: hotelmate backup create|list|verify|restore|drill", nil)
 	}
 }
 
@@ -198,6 +206,9 @@ func (a *App) sendRecoverySetOffHost(ctx context.Context, config resolvedConfig,
 		return "", failure(ExitVerification, "encrypted off-host transfer failed", sanitizedToolError(err, stderr.String()))
 	}
 	snapshot := resticSnapshotID(stdout.Bytes())
+	if snapshot == "" {
+		return "", failure(ExitVerification, "restic did not report an off-host snapshot identity", nil)
+	}
 	return snapshot, nil
 }
 
@@ -217,7 +228,7 @@ func (a *App) enforceResticRetention(ctx context.Context, config resolvedConfig)
 	if err := a.Executor.Run(ctx, "restic", []string{"check"}, env, nil, ioDiscard{}, &stderr); err != nil {
 		return failure(ExitVerification, "off-host repository verification failed", sanitizedToolError(err, stderr.String()))
 	}
-	forgetArgs := []string{"forget", "--prune", "--tag", "hotelmate", "--keep-daily", strconv.Itoa(config.ResticKeepDaily), "--keep-weekly", strconv.Itoa(config.ResticKeepWeekly)}
+	forgetArgs := []string{"forget", "--prune", "--tag", "hotelmate", "--tag", "environment:" + config.Environment, "--keep-daily", strconv.Itoa(config.ResticKeepDaily), "--keep-weekly", strconv.Itoa(config.ResticKeepWeekly)}
 	stderr.Reset()
 	if err := a.Executor.Run(ctx, "restic", forgetArgs, env, nil, ioDiscard{}, &stderr); err != nil {
 		return failure(ExitVerification, "off-host retention enforcement failed", sanitizedToolError(err, stderr.String()))
@@ -238,7 +249,7 @@ func resticSnapshotID(output []byte) string {
 			}
 		}
 	}
-	return "recorded-by-restic"
+	return ""
 }
 
 func listBackups(directory string) (any, error) {
@@ -298,11 +309,41 @@ func readRecoverySet(path string) (recoverySet, error) {
 	if err := decoder.Decode(&manifest); err != nil {
 		return recoverySet{}, err
 	}
-	if manifest.SchemaVersion != recoverySchemaVersion || manifest.ID == "" || manifest.Database.File == "" {
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return recoverySet{}, fmt.Errorf("recovery manifest must contain one JSON document")
+	}
+	if manifest.SchemaVersion != recoverySchemaVersion || !recoverySetID.MatchString(manifest.ID) || manifest.CreatedAt.IsZero() || manifest.Environment == "" || manifest.ReleaseVersion == "" || len(manifest.Migrations) == 0 {
 		return recoverySet{}, fmt.Errorf("unsupported or incomplete recovery manifest")
+	}
+	if err := validateRecoveryArtifact(manifest.Database, 1024); err != nil {
+		return recoverySet{}, fmt.Errorf("invalid database artifact: %w", err)
+	}
+	if manifest.Uploads != nil {
+		if err := validateRecoveryArtifact(*manifest.Uploads, 1); err != nil {
+			return recoverySet{}, fmt.Errorf("invalid upload artifact: %w", err)
+		}
+	}
+	if manifest.OffHost && manifest.ResticSnapshot == "" {
+		return recoverySet{}, fmt.Errorf("off-host recovery manifest has no snapshot identity")
 	}
 	manifest.ManifestFile, _ = filepath.Abs(path)
 	return manifest, nil
+}
+
+func validateRecoveryArtifact(artifact recoveryArtifact, minimumBytes int64) error {
+	if artifact.File == "" || artifact.File != filepath.Base(artifact.File) || artifact.File == "." || artifact.File == ".." {
+		return fmt.Errorf("file must be a base name")
+	}
+	if artifact.Bytes < minimumBytes {
+		return fmt.Errorf("artifact is smaller than %d bytes", minimumBytes)
+	}
+	if len(artifact.SHA256) != sha256.Size*2 {
+		return fmt.Errorf("SHA-256 digest must contain 64 hexadecimal characters")
+	}
+	if _, err := hex.DecodeString(artifact.SHA256); err != nil {
+		return fmt.Errorf("SHA-256 digest is invalid")
+	}
+	return nil
 }
 
 func (a *App) verifyBackup(ctx context.Context, config resolvedConfig, manifest recoverySet) (any, error) {

@@ -1,4 +1,4 @@
-.PHONY: dev up down logs seed-demo doctor config-validate migrate migrate-status purge-documents purge-messages backup backup-list backup-verify restore smoke acceptance deploy-preflight deploy-status deploy-apply deploy-rollback backend-test backend-fmt frontend-install frontend-build
+.PHONY: dev up down logs seed-demo doctor config-validate migrate migrate-status purge-documents purge-messages backup backup-list backup-verify restore recovery-drill smoke acceptance deploy-preflight deploy-status deploy-apply deploy-rollback backend-test backend-fmt frontend-install frontend-build
 
 HOTELMATE = cd backend && go run ./cmd/hotelmate --
 
@@ -46,6 +46,9 @@ backup-verify:
 
 restore:
 	$(HOTELMATE) --manifest "$(BACKUP_FILE)" backup restore $(CONFIRM)
+
+recovery-drill:
+	$(HOTELMATE) --config "$(CONFIG_FILE)" backup drill --yes
 
 smoke:
 	$(HOTELMATE) --base-url "$(BASE_URL)" smoke

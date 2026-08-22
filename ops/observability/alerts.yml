@@ -36,6 +36,27 @@ groups:
         annotations:
           summary: HotelMate TLS certificate expires within 14 days
 
+      - alert: HotelMateReleaseIdentityMissing
+        expr: absent(hotelmate_build_info)
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: HotelMate release version, commit, and image identity are unavailable
+
+      - alert: HotelMateAuthenticationAnomaly
+        expr: sum(rate(hotelmate_http_requests_total{pattern=~".*/auth/.*",status=~"401|403"}[5m])) > 1
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: Authentication failures exceed one request per second
+
+      - alert: HotelMateWebSocketErrors
+        expr: sum(rate(hotelmate_http_requests_total{pattern=~".*(/events|events).*",status=~"5.."}[5m])) > 0
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: HotelMate realtime connection requests are returning server errors
+
   - name: hotelmate-platform
     rules:
       - alert: HotelMateBackupStale
@@ -46,11 +67,25 @@ groups:
           summary: No verified HotelMate backup has completed in 26 hours
 
       - alert: HotelMateRetentionJobStale
-        expr: absent(hotelmate_job_last_success_timestamp_seconds{job=~"purge_.*"}) or (time() - hotelmate_job_last_success_timestamp_seconds{job=~"purge_.*"} > 26 * 3600)
+        expr: count(hotelmate_job_last_success_timestamp_seconds{job=~"purge_documents|purge_messages"}) < 2 or (time() - hotelmate_job_last_success_timestamp_seconds{job=~"purge_documents|purge_messages"} > 26 * 3600)
         for: 15m
         labels: { severity: ticket }
         annotations:
           summary: A HotelMate privacy-retention purge is stale
+
+      - alert: HotelMateOperationFailed
+        expr: hotelmate_job_last_run_success{job=~"backup|restore|restore_drill|purge_documents|purge_messages|deploy|rollback|migrate"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: The latest HotelMate {{ $labels.job }} operation failed
+
+      - alert: HotelMateRestoreDrillStale
+        expr: absent(hotelmate_job_last_success_timestamp_seconds{job="restore_drill"}) or (time() - hotelmate_job_last_success_timestamp_seconds{job="restore_drill"} > 35 * 24 * 3600)
+        for: 1h
+        labels: { severity: ticket }
+        annotations:
+          summary: No successful isolated recovery drill is recorded within 35 days
 
       - alert: HotelMateHostDiskPressure
         expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.15
@@ -66,6 +101,27 @@ groups:
         annotations:
           summary: Host filesystem has less than 15% free inodes
 
+      - alert: HotelMateHostCPUHigh
+        expr: 1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) > 0.90
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: Host CPU utilization exceeds 90%
+
+      - alert: HotelMateHostMemoryPressure
+        expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: Host has less than 10% available memory
+
+      - alert: HotelMatePrivateVolumeCapacity
+        expr: node_filesystem_avail_bytes{mountpoint=~"/|/srv/hotelmate-private"} / node_filesystem_size_bytes{mountpoint=~"/|/srv/hotelmate-private"} < 0.20
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: The filesystem carrying HotelMate private data has less than 20% free space
+
       - alert: HotelMateContainerRestarting
         expr: changes(container_start_time_seconds{name=~".*(api|web|postgres).*"}[15m]) > 0
         for: 5m
@@ -79,6 +135,34 @@ groups:
         labels: { severity: page }
         annotations:
           summary: PostgreSQL metrics are unavailable
+
+      - alert: HotelMatePostgresConnectionsHigh
+        expr: sum(pg_stat_activity_count) / clamp_min(max(pg_settings_max_connections), 1) > 0.80
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: PostgreSQL is using more than 80% of its connection limit
+
+      - alert: HotelMatePostgresQueryLatencyHigh
+        expr: sum(rate(pg_stat_statements_seconds_total[5m])) / clamp_min(sum(rate(pg_stat_statements_calls_total[5m])), 0.001) > 0.5
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: Mean PostgreSQL statement execution time exceeds 500ms
+
+      - alert: HotelMatePostgresQueryTelemetryFailed
+        expr: pg_scrape_collector_success{collector="stat_statements"} == 0
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: PostgreSQL statement-latency collection is failing
+
+      - alert: HotelMatePostgresStorageGrowthHigh
+        expr: sum(deriv(container_fs_usage_bytes{name=~".*postgres.*"}[6h])) * 86400 > 1073741824
+        for: 1h
+        labels: { severity: ticket }
+        annotations:
+          summary: PostgreSQL container storage is growing by more than 1 GiB per day
 
       - alert: HotelMateCentralLogsDown
         expr: up{job="loki"} == 0

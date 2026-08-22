@@ -6,6 +6,14 @@ hotelmate_ssh_public_keys:
 hotelmate_ssh_port: 22
 hotelmate_metrics_retention: 30d
 hotelmate_alert_receiver_configured: false
+hotelmate_recovery_drill_enabled: false
+hotelmate_cli_sha256: REPLACE_WITH_RELEASE_CLI_SHA256
+hotelmate_cosign_sha256: REPLACE_WITH_APPROVED_COSIGN_SHA256
+hotelmate_docker_daemon_config:
+  log-driver: json-file
+  log-opts:
+    max-size: 20m
+    max-file: "5"
 
 # Vault-encrypt the real values in group_vars/all/vault.yml. Never commit them.
 hotelmate_production_env: |
@@ -31,3 +39,25 @@ hotelmate_production_env: |
   GRAFANA_ADMIN_PASSWORD={{ vault_grafana_admin_password }}
   COSIGN_CERTIFICATE_IDENTITY=https://github.com/TablazOrg/HotelMate/.github/workflows/release.yml@refs/heads/main
   COSIGN_CERTIFICATE_OIDC_ISSUER=https://token.actions.githubusercontent.com
+  SMOKE_HOTEL_SLUG={{ vault_smoke_hotel_slug }}
+  SMOKE_STAFF_EMAIL={{ vault_smoke_staff_email }}
+  SMOKE_STAFF_PASSWORD={{ vault_smoke_staff_password }}
+
+# When enabled, Vault-encrypt a dedicated non-production database, URL,
+# uploads path, credentials, operator, and approved objectives. The drill
+# timer must never target the production DATABASE_URL or public domain.
+# hotelmate_recovery_drill_env: |
+#   APP_ENV=staging
+#   HOTELMATE_ISOLATED_RECOVERY_DRILL=true
+#   HOTELMATE_OPERATOR=systemd
+#   HOTELMATE_BASE_URL=https://recovery-drill.hotel.example.com
+#   HOTELMATE_BACKUP_DIR=/srv/hotelmate-private/backups
+#   HOTELMATE_EVIDENCE_DIR=/srv/hotelmate-private/evidence
+#   HOTELMATE_HOST_UPLOADS_DIR=/srv/hotelmate-drill/uploads
+#   HOTELMATE_TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+#   HOTELMATE_DRILL_MAX_RPO=24h
+#   HOTELMATE_DRILL_MAX_RTO=2h
+#   DATABASE_URL={{ vault_recovery_drill_database_url }}
+#   JWT_SECRET={{ vault_recovery_drill_jwt_secret }}
+#   ONBOARDING_TOKEN={{ vault_recovery_drill_onboarding_token }}
+#   ALLOWED_ORIGINS=https://recovery-drill.hotel.example.com
