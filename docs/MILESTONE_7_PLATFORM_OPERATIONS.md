@@ -16,7 +16,7 @@ As of 2026-08-23, the repository contains the M7 provider-neutral foundation:
 - A provider-neutral Ubuntu/Ansible baseline for non-root deployment, key-only SSH, firewalling, unattended security updates, Docker log rotation, certificate renewal, protected directories, timers, and checksummed CLI/cosign installation.
 - Prometheus application/release metrics, `pg_stat_statements`, PostgreSQL/host/container/external probes, Loki/Alloy request-ID correlation, a provisioned Grafana dashboard, and alerts for availability, errors, latency, authentication, WebSockets, operations, TLS, capacity, database behavior, backups, purges, and restore-drill age.
 
-M7 remains **in progress**, not complete. [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved; no external provider, domain, staging/production hosts, protected GitHub environments, registry credentials, restic destination, secrets manager, or paging receiver were supplied. Consequently the repository cannot truthfully produce public DNS/TLS, signed registry publication, protected promotion, encrypted off-host durability, provider rebuild/drift, or routed-alert evidence.
+M7 remains **in progress**, not complete. [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved; no external provider, domain, deployment-capable staging/production hosts, SSH target credentials, approved production protection, restic destination, secrets manager, or paging receiver were supplied. Consequently the repository cannot truthfully produce public DNS/TLS, staging/production availability, protected production promotion, encrypted off-host durability, provider rebuild/drift, or routed-alert evidence.
 
 ### Local verification evidence
 
@@ -27,6 +27,8 @@ The sanitized evidence record is [M7 local validation — 2026-08-23](evidence/M
 - Recovery set `hotelmate-20260822T203931Z` contains a 125,940-byte PostgreSQL custom dump and a 989-byte private-upload archive. Both hashes matched, `pg_restore` reported 162 catalog entries, and all seven migrations were present.
 - An isolated non-production drill restored that set into a dedicated database and upload path, ran migrations, authenticated smoke, tenant isolation, private-document checks, and the complete acceptance suite, then removed the temporary API container and database. It measured local RPO at 268 seconds and local RTO at 4 seconds.
 - A distinct-image application rollback and redeploy passed previously through the same CLI evidence path.
+- [CI #21](https://github.com/TablazOrg/HotelMate/actions/runs/32600378218) passed all five gates for commit `fb5dbd8`. The release job in [Release and deploy #5](https://github.com/TablazOrg/HotelMate/actions/runs/32600447283) published the API/web images to GHCR, passed high/critical image scans, generated SPDX SBOMs, signed and verified both images and attestations, and uploaded the immutable release bundle.
+- The same release reached staging and failed only at the SSH deployment step with exit 255 because a deployment target and credentials were not supplied; production was correctly skipped rather than promoting an untested release.
 
 These values prove the local command paths, validation, recovery selection, and safety guards. They are not approved production RPO/RTO targets, public availability, encrypted off-host durability, or provider rebuild evidence.
 
@@ -35,7 +37,7 @@ These values prove the local command paths, validation, recovery selection, and 
 | M7 capability | Repository evidence | Current status |
 | --- | --- | --- |
 | Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script compatibility aliases, unit/failure-path tests | Implemented and locally proven |
-| CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented; external registry publication and branch/environment enforcement pending |
+| CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented and remotely proven by CI #21/release #5; branch and production-environment enforcement pending |
 | Delivery and rollback | Digest policy, preflight, owner locks, migrations, checkpoint, activation, authenticated smoke, automatic/application rollback, timestamped evidence | Locally proven; staging/production promotion pending |
 | Backup and restore | Strict coordinated manifests, checksums, PostgreSQL catalog checks, upload path safety, restic encryption/retention, metrics/timers | Local recovery set proven; approved off-host repository and immutability pending |
 | Recovery rehearsal | Isolated-target guard, point-in-time set selection, restore, migrations, smoke, native acceptance, RPO/RTO evidence, monthly timer | Local drill passed; scheduled provider-backed drill and approved objectives pending |

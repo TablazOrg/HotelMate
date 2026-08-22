@@ -6,14 +6,17 @@ This is a sanitized, reviewable record of the local M7 exercise. Raw JSON, datab
 
 | Check | Result |
 | --- | --- |
-| Current local deploy | `hotelmate deploy apply --yes` succeeded from `hotelmate.release/v1` at `21:04:08Z` |
+| Current local deploy | `hotelmate deploy apply --yes` succeeded from `hotelmate.release/v1` at `21:31:23Z` |
 | Edge readiness | `GET http://localhost:3000/readyz` returned `ready` |
 | Authenticated smoke | Health, readiness, API metadata, staff login/session, and operations report passed |
 | Native Go acceptance | Passed after replacing the shell implementation; generated tenants were `acceptance-20260822210328-91565502` and `acceptance-other-20260822210328-91565502` |
 | Schema | Seven migrations applied; zero pending |
 | Release identity | `hotelmate_build_info{version="0.7.0-local",commit="working-tree",image="hotelmate-api:dev"} 1` |
-| Running API image | Local OCI image ID `sha256:d189877a19c6d859a3fc4fc818a78ceee3cfcb4eff2627ab18fa133adb6bf2c2` |
+| Running API image | Local OCI image ID `sha256:97857d6179926176c7ea2f6a24f1a6ada8f53cd5ae214f5159d8209203479963` |
 | Application rollback | A prior distinct-image rollback, smoke verification, and redeploy succeeded through the CLI evidence path |
+| Main-branch CI | [CI #21](https://github.com/TablazOrg/HotelMate/actions/runs/32600378218) passed backend, frontend, repository-security, platform-configuration, and container gates for commit `fb5dbd8` |
+| Immutable release | The release job in [Release and deploy #5](https://github.com/TablazOrg/HotelMate/actions/runs/32600447283) published both GHCR images, passed high/critical scans, generated SPDX SBOMs, signed and verified images/attestations, and uploaded `hotelmate-release-0.7.0-fb5dbd8ade4c` (5.1 MB; artifact SHA-256 `51cd68a3b20031bb145ea7510002b3df9d910b43a7d9ac9338ed95c1c03a6b4c`) |
+| External promotion | Staging reached the exact-digest SSH deployment step, then failed in seven seconds with exit 255 because no deployment-capable external target/credentials were supplied; production was correctly skipped |
 
 The acceptance suite covered tenant onboarding/default content, primary-admin and housekeeping RBAC, cross-tenant reservation/request/document denial, reservation and stay transitions, pre-arrival and active-stay ordering, private document upload/download integrity, prompt-injection handoff, department fulfillment, reports, correlated audits, checkout, and session invalidation.
 
@@ -50,4 +53,4 @@ The successful drill result had SHA-256 `c7977526cf29b063f235993613693bd3b6e8a89
 
 ## Interpretation and external gates
 
-This exercise proves the provider-neutral implementation and local safety path. It does not prove approved production RPO/RTO, public DNS/TLS, signed remote registry artifacts, encrypted restic transfer, storage immutability, protected GitHub approval, provider rebuild/drift, paging delivery, or staging/production availability. Those require the owner inputs in [ADR-0007](../adr/0007-platform-operations-decisions.md) and real external resources.
+This exercise proves the provider-neutral implementation, local safety path, and remote supply-chain path through signed, attested, digest-pinned GHCR artifacts. It does not prove approved production RPO/RTO, public DNS/TLS, encrypted restic transfer, storage immutability, protected production approval, provider rebuild/drift, paging delivery, or staging/production availability. Those require the owner inputs in [ADR-0007](../adr/0007-platform-operations-decisions.md) and real external resources.
