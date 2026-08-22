@@ -61,9 +61,10 @@ input[type="checkbox"] { width: 17px; min-height: 17px; accent-color: var(--bran
 .auth-shell { min-height: 100vh; display: grid; place-items: center; padding: 28px 16px; background: var(--grey-100); }
 .auth-mobile { width: min(100%, 430px); min-height: min(760px, calc(100vh - 56px)); display: flex; flex-direction: column; padding: 30px 24px 22px; border: 1px solid var(--grey-200); border-radius: 28px; background: #fff; }
 .auth-brand { display: flex; align-items: center; gap: 10px; direction: ltr; }
-.auth-brand > span, .auth-brand > img { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; object-fit: contain; color: #fff; background: linear-gradient(180deg, var(--brand), var(--brand-dark)); font-size: 15px; font-weight: 800; }
+.auth-brand > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; color: #fff; background: linear-gradient(180deg, var(--brand), var(--brand-dark)); font-size: 15px; font-weight: 800; }
+.auth-brand > img { width: 34px; height: 34px; flex: 0 0 auto; object-fit: contain; }
 .auth-brand strong { color: var(--grey-800); font-size: 16px; letter-spacing: -.02em; }
-.auth-brand.small > span { width: 30px; height: 30px; border-radius: 10px; font-size: 13px; }
+.auth-brand.small > span, .auth-brand.small > img { width: 30px; height: 30px; border-radius: 10px; font-size: 13px; }
 .auth-brand.small strong { font-size: 14px; }
 .auth-intro { margin: 60px 0 28px; }
 .auth-intro > span { width: 48px; height: 48px; display: grid; place-items: center; margin-bottom: 20px; border-radius: 14px; color: var(--brand-dark); background: var(--brand-soft); font-size: 23px; }
@@ -271,6 +272,7 @@ input[type="checkbox"] { width: 17px; min-height: 17px; accent-color: var(--bran
 .admin-sidebar { display: flex; flex-direction: column; padding: 22px 14px 16px; border-left: 1px solid var(--grey-100); }
 .admin-logo { display: flex; align-items: center; gap: 9px; padding: 0 7px 25px; }
 .admin-logo > span { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; color: #fff; background: linear-gradient(180deg, var(--brand), var(--brand-dark)); font-weight: 800; }
+.admin-logo > img { width: 34px; height: 34px; flex: 0 0 auto; object-fit: contain; }
 .admin-logo > div { display: flex; flex-direction: column; min-width: 0; }
 .admin-logo strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .admin-logo small { color: var(--grey-400); font-size: 9.5px; }

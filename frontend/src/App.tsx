@@ -108,7 +108,7 @@ function LoginScreen({ onAuthenticated }: { onAuthenticated: (response: StaffLog
 
   return <main className="auth-shell" style={handoffTheme(hotel?.primaryColor)}>
     <section className="auth-mobile">
-      <div className="auth-brand">{hotel?.logoUrl ? <img src={hotel.logoUrl} alt="" /> : <span>H</span>}<strong>{hotel?.name || 'HotelMate'}</strong></div>
+      <div className="auth-brand"><img src={hotel?.logoUrl || '/hotelmate-logo.svg'} alt="" /><strong>{hotel?.name || 'HotelMate'}</strong></div>
       <div className="auth-intro"><span><i className={mode === 'staff' ? 'ri-shield-user-line' : guestAccess === 'reservation' ? 'ri-calendar-check-line' : 'ri-key-2-line'} /></span><h1>{title}</h1><p>{helper}</p></div>
       <form onSubmit={submit} className="auth-form">
         <label>شناسه هتل<input value={hotelSlug} onChange={(event) => setHotelSlug(event.target.value)} placeholder="example-hotel" autoComplete="organization" dir="ltr" required /></label>
@@ -137,7 +137,7 @@ function PreArrivalExperience({ stay, token, onLogout }: { stay: Stay; token: st
   const departure = stay.reservation?.departureDate
   const days = arrival ? Math.max(0, Math.ceil((new Date(arrival).getTime() - Date.now()) / 86400000)) : 0
   return <div className="prearrival-app" style={handoffTheme(stay.hotel.primaryColor)}><div className="mobile-surface prearrival-surface">
-    <header className="prearrival-top"><div className="auth-brand small"><span>H</span><strong>{stay.hotel.name}</strong></div><button type="button" onClick={onLogout}><i className="ri-logout-box-r-line" /></button></header>
+    <header className="prearrival-top"><div className="auth-brand small"><img src={stay.hotel.logoUrl || '/hotelmate-logo.svg'} alt="" /><strong>{stay.hotel.name}</strong></div><button type="button" onClick={onLogout}><i className="ri-logout-box-r-line" /></button></header>
     <main className="prearrival-content view-enter">
       <span className="confirmed-pill"><i className="ri-checkbox-circle-fill" /> رزرو تأیید شد</span>
       <h1>{days ? `تا اقامت شما ${toFaDigits(days)} روز مانده` : 'برای اقامت شما آماده‌ایم'}</h1>
@@ -171,7 +171,7 @@ function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { ses
     { id: 'staff', icon: 'ri-team-line', label: 'حساب‌های پرسنل', visible: isAdmin },
   ]
   return <div className="admin-app" style={handoffTheme(hotel.primaryColor)}><div className="admin-shell">
-    <aside className="admin-sidebar"><div className="admin-logo"><span>H</span><div><strong>{hotel.name}</strong><small>پنل مدیریت</small></div></div><p className="nav-eyebrow">فضای کاری</p><nav>{navigation.filter((item) => item.visible).map((item) => <button type="button" key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><i className={item.icon} />{item.label}</button>)}</nav><div className="admin-identity"><span>{initialStaff.firstName.slice(0, 1)}{initialStaff.lastName.slice(0, 1)}</span><div><strong>{initialStaff.firstName} {initialStaff.lastName}</strong><small>{roleLabels[initialStaff.role]}</small></div><button type="button" onClick={onLogout} title="خروج"><i className="ri-logout-box-r-line" /></button></div></aside>
+    <aside className="admin-sidebar"><div className="admin-logo"><img src={hotel.logoUrl || '/hotelmate-logo.svg'} alt="" /><div><strong>{hotel.name}</strong><small>پنل مدیریت</small></div></div><p className="nav-eyebrow">فضای کاری</p><nav>{navigation.filter((item) => item.visible).map((item) => <button type="button" key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><i className={item.icon} />{item.label}</button>)}</nav><div className="admin-identity"><span>{initialStaff.firstName.slice(0, 1)}{initialStaff.lastName.slice(0, 1)}</span><div><strong>{initialStaff.firstName} {initialStaff.lastName}</strong><small>{roleLabels[initialStaff.role]}</small></div><button type="button" onClick={onLogout} title="خروج"><i className="ri-logout-box-r-line" /></button></div></aside>
     <main className="admin-content">
       {tab === 'dashboard' && <AdminRequestOverview token={session.token} />}
       {tab === 'reception' && <OperationsPanel token={session.token} />}
