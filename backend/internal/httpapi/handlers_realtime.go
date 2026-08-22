@@ -41,6 +41,8 @@ func (s *Server) realtimeEvents(w http.ResponseWriter, r *http.Request) {
 		s.logger.Warn("accept realtime connection", "error", err)
 		return
 	}
+	s.metrics.WebsocketOpened()
+	defer s.metrics.WebsocketClosed()
 	defer connection.Close(websocket.StatusNormalClosure, "session ended")
 	connection.SetReadLimit(1024)
 	connectionContext := connection.CloseRead(context.Background())

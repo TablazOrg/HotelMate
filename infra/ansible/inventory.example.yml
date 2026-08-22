@@ -1,0 +1,12 @@
+all:
+  hosts:
+    hotelmate-staging:
+      ansible_host: 203.0.113.10
+      ansible_user: root
+      hotelmate_environment: staging
+      hotelmate_domain: staging.hotel.example.com
+    hotelmate-production:
+      ansible_host: 203.0.113.11
+      ansible_user: root
+      hotelmate_environment: production
+      hotelmate_domain: hotel.example.com

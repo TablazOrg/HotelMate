@@ -1,0 +1,17 @@
+[Unit]
+Description=HotelMate private-document retention purge
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=hotelmate
+Group=hotelmate
+WorkingDirectory=/srv/hotelmate
+ExecStart=/usr/local/bin/hotelmate --config /etc/hotelmate/production.env retention purge-documents --yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/hotelmate-private /var/lib/node_exporter/textfile_collector
+UMask=0077
+TimeoutStartSec=30m

@@ -1,0 +1,22 @@
+{
+  "annotations": { "list": [] },
+  "editable": false,
+  "panels": [
+    { "type": "stat", "title": "External availability", "id": 1, "gridPos": { "h": 8, "w": 6, "x": 0, "y": 0 }, "targets": [{ "expr": "probe_success{job=\"hotelmate-external\"}", "refId": "A" }] },
+    { "type": "stat", "title": "API readiness", "id": 2, "gridPos": { "h": 8, "w": 6, "x": 6, "y": 0 }, "targets": [{ "expr": "hotelmate_ready", "refId": "A" }] },
+    { "type": "timeseries", "title": "HTTP request rate", "id": 3, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }, "targets": [{ "expr": "sum by (status) (rate(hotelmate_http_requests_total[5m]))", "legendFormat": "{{status}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "Mean request latency", "id": 4, "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 }, "targets": [{ "expr": "sum(rate(hotelmate_http_request_duration_seconds_sum[5m])) / clamp_min(sum(rate(hotelmate_http_request_duration_seconds_count[5m])), 0.001)", "refId": "A" }] },
+    { "type": "timeseries", "title": "Active WebSockets", "id": 5, "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 }, "targets": [{ "expr": "hotelmate_websocket_connections", "refId": "A" }] },
+    { "type": "stat", "title": "Backup age (hours)", "id": 6, "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 }, "targets": [{ "expr": "(time() - hotelmate_job_last_success_timestamp_seconds{job=\"backup\"}) / 3600", "refId": "A" }] },
+    { "type": "timeseries", "title": "Host disk free", "id": 7, "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 }, "targets": [{ "expr": "node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"}", "legendFormat": "{{mountpoint}}", "refId": "A" }] },
+    { "type": "timeseries", "title": "PostgreSQL connections", "id": 8, "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 }, "targets": [{ "expr": "pg_stat_activity_count", "legendFormat": "{{state}}", "refId": "A" }] }
+  ],
+  "schemaVersion": 41,
+  "tags": ["hotelmate", "operations"],
+  "templating": { "list": [] },
+  "time": { "from": "now-6h", "to": "now" },
+  "timezone": "browser",
+  "title": "HotelMate platform operations",
+  "uid": "hotelmate-platform",
+  "version": 1
+}

@@ -1,0 +1,12 @@
+route:
+  receiver: unconfigured-local-receiver
+  group_by: [alertname, environment]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+receivers:
+  - name: unconfigured-local-receiver
+
+# Replace the local receiver with the approved paging destination from ADR-0007
+# before a staging or production environment is considered operationally ready.

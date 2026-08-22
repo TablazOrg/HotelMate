@@ -18,6 +18,9 @@ npm-debug.log*
 # Local infrastructure
 postgres-data/
 uploads/
+.hotelmate/
+infra/ansible/group_vars/all.yml
+infra/ansible/group_vars/all/vault.yml
 
 # IDE / OS
 .DS_Store

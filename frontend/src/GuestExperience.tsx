@@ -125,7 +125,7 @@ function HomeView({ stay, quickServices, paidServices, openCount, busy, onReques
     <section className="guest-section">
       <div className="compact-heading"><h2>سرویس‌های ویژه</h2><span>پرداخت در محل</span></div>
       <div className="service-rows">
-        {paidServices.length ? paidServices.slice(0, 3).map((service) => <ServiceRow service={service} key={service.id} busy={busy} onRequest={onRequest} />) : <div className="future-card"><i className="ri-gift-line" /><div><strong>سرویس‌های ویژه در راه است</strong><p>سفارش‌های پولی پس از تکمیل Milestone 4 فعال می‌شوند.</p></div></div>}
+        {paidServices.length ? paidServices.slice(0, 3).map((service) => <ServiceRow service={service} key={service.id} busy={busy} onRequest={onRequest} />) : <div className="future-card"><i className="ri-gift-line" /><div><strong>سرویس ویژه‌ای فعال نیست</strong><p>سرویس‌های ویژه پس از فعال‌سازی توسط هتل در این بخش نمایش داده می‌شوند.</p></div></div>}
       </div>
     </section>
   </div>

@@ -2,11 +2,17 @@
 
 HotelMate connects hotel guests with reception and hotel operations: pre-arrival check-in, service requests, upsells, facilities, restaurant content, and AI-assisted conversations.
 
-The current delivery completes Milestones 0–6: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, private online check-in documents, service operations and paid ordering, hotel content, live request/chat events, approved-knowledge guest conversations with reception handoff, server-calculated reporting, audit administration, and production hardening. The Persian RTL guest/staff/admin interface follows the supplied design handoff.
+The current delivery completes Milestones 0–6 and delivers the provider-neutral M7 platform foundation: infrastructure, tenant-aware identity/access, reservation and stay lifecycle, room state management, private online check-in documents, service operations and paid ordering, hotel content, live request/chat events, approved-knowledge guest conversations with reception handoff, server-calculated reporting, audit administration, production hardening, a unified operations CLI, immutable release automation, verified recovery sets, host configuration, and operational monitoring. The Persian RTL guest/staff/admin interface follows the supplied design handoff.
+
+Milestone 7 is in progress. Its code and local deployment path are implemented, but production completion still requires the owner/provider decisions, external accounts, protected GitHub environments, public staging/production promotion, off-host restore drill, and tested alert routing recorded in [docs/MILESTONE_7_PLATFORM_OPERATIONS.md](docs/MILESTONE_7_PLATFORM_OPERATIONS.md) and [ADR-0007](docs/adr/0007-platform-operations-decisions.md).
+
+The M7 development release has been deployed locally at <http://localhost:3000>; CLI preflight/apply, full acceptance, a distinct-image rollback/redeploy, and an isolated PostgreSQL restore have been exercised. This local evidence does not substitute for the pending public staging/production gates.
+
+Product improvement Milestones 8–12 are planned for online check-in 2.0, guest/staff UX, lifecycle communication and personalization, commerce and digital checkout, and hospitality integrations with journey intelligence. The local-app audit and Duve/Canary/HiJiffy benchmark are documented in [docs/PRODUCT_IMPROVEMENT_MILESTONES.md](docs/PRODUCT_IMPROVEMENT_MILESTONES.md).
 
 ## Stack
 
-- **API:** Go 1.24, `net/http`, GORM
+- **API:** Go 1.25.13, `net/http`, GORM
 - **Web:** React + TypeScript + Vite
 - **Database:** PostgreSQL 16
 - **Local runtime:** Docker Compose + Nginx
@@ -43,9 +49,9 @@ The seed is disabled in production and prints its local demo credentials.
 2. Run the API: `cd backend && go run ./cmd/api`.
 3. Install and run the web app: `cd frontend && npm install && npm run dev`.
 
-Useful commands are available in the root `Makefile`. When `AUTO_MIGRATE=true`, the API applies reviewed GORM schema steps through the `hotelmate_schema_migrations` ledger.
+Useful commands are available in the root `Makefile`. `make doctor`, `make migrate-status`, `make backup`, and the deployment targets are thin aliases for the `hotelmate` operations CLI. When `AUTO_MIGRATE=true`, the development API applies reviewed GORM schema steps through the `hotelmate_schema_migrations` ledger; staging/production disable startup migration and run it explicitly in the locked deployment workflow.
 
-Release operations include `make migrate`, `make backup BACKUP_DIR=/absolute/private/path`, and `make smoke BASE_URL=https://hotel.example.com`. Restoration is deliberately guarded and documented in [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md).
+Release operations include `make migrate`, `make backup BACKUP_DIR=/absolute/private/path`, and `make smoke BASE_URL=https://hotel.example.com`. The CLI and JSON contract are documented in [docs/OPERATIONS_CLI.md](docs/OPERATIONS_CLI.md); deployment/incident procedures are in [docs/OPERATIONS_RUNBOOK.md](docs/OPERATIONS_RUNBOOK.md), and restoration remains deliberately guarded in [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md).
 
 Online check-in files are stored in the private `uploads` volume, never under the web root. Run `make purge-documents` regularly; production scheduling is documented in the deployment guide.
 
@@ -60,4 +66,8 @@ Paid service prices and request totals are stored as integer IRR amounts in the 
 - [Beginner guide](docs/BEGINNER_GUIDE.md)
 - [Production deployment](docs/DEPLOYMENT_GUIDE.md)
 - [Backup and restore runbook](docs/BACKUP_RESTORE.md)
+- [Operations CLI contract](docs/OPERATIONS_CLI.md)
+- [Platform operations runbook](docs/OPERATIONS_RUNBOOK.md)
+- [M7 platform operations and infrastructure](docs/MILESTONE_7_PLATFORM_OPERATIONS.md)
+- [Product improvement milestones and benchmark](docs/PRODUCT_IMPROVEMENT_MILESTONES.md)
 - [Foreign VPS notes](docs/FOREIGN_VPS_GUIDE.md)

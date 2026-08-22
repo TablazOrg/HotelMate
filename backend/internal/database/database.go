@@ -11,12 +11,44 @@ import (
 	"gorm.io/gorm"
 )
 
+const schemaMigrationVersionSize = 128
+
 type schemaMigration struct {
-	Version   string    `gorm:"primaryKey;size:32"`
+	Version   string    `gorm:"primaryKey;size:128"`
 	AppliedAt time.Time `gorm:"not null"`
 }
 
 func (schemaMigration) TableName() string { return "hotelmate_schema_migrations" }
+
+type migrationStep struct {
+	version string
+	apply   func(*gorm.DB) error
+}
+
+// MigrationStatus is the stable, secret-free representation consumed by the
+// operations CLI and release evidence.
+type MigrationStatus struct {
+	Version   string     `json:"version"`
+	Applied   bool       `json:"applied"`
+	AppliedAt *time.Time `json:"appliedAt,omitempty"`
+}
+
+var migrationSteps = []migrationStep{
+	{version: "2026082101_identity_tenancy", apply: migrateIdentityTenancy},
+	{version: "2026082102_reservation_lifecycle", apply: migrateReservationLifecycle},
+	{version: "2026082103_service_operations", apply: migrateServiceOperations},
+	{version: "2026082204_revenue_content", apply: migrateRevenueContent},
+	{version: "2026082205_conversations_knowledge", apply: migrateConversationsKnowledge},
+	{version: "2026082206_reporting_hardening", apply: migrateReportingHardening},
+}
+
+func MigrationVersions() []string {
+	versions := make([]string, 0, len(migrationSteps))
+	for _, step := range migrationSteps {
+		versions = append(versions, step.version)
+	}
+	return versions
+}
 
 func Open(ctx context.Context, dsn string) (*gorm.DB, error) {
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{TranslateError: true})
@@ -51,23 +83,20 @@ func Close(db *gorm.DB) error {
 }
 
 func Migrate(db *gorm.DB) error {
+	for _, migration := range migrationSteps {
+		if len(migration.version) > schemaMigrationVersionSize {
+			return fmt.Errorf("migration version %q exceeds ledger capacity of %d characters", migration.version, schemaMigrationVersionSize)
+		}
+	}
+
 	if err := db.AutoMigrate(&schemaMigration{}); err != nil {
 		return fmt.Errorf("create migration ledger: %w", err)
 	}
-
-	migrations := []struct {
-		version string
-		apply   func(*gorm.DB) error
-	}{
-		{version: "2026082101_identity_tenancy", apply: migrateIdentityTenancy},
-		{version: "2026082102_reservation_lifecycle", apply: migrateReservationLifecycle},
-		{version: "2026082103_service_operations", apply: migrateServiceOperations},
-		{version: "2026082204_revenue_content", apply: migrateRevenueContent},
-		{version: "2026082205_conversations_knowledge", apply: migrateConversationsKnowledge},
-		{version: "2026082206_reporting_hardening", apply: migrateReportingHardening},
+	if err := widenMigrationLedgerVersion(db); err != nil {
+		return err
 	}
 
-	for _, migration := range migrations {
+	for _, migration := range migrationSteps {
 		var count int64
 		if err := db.Model(&schemaMigration{}).Where("version = ?", migration.version).Count(&count).Error; err != nil {
 			return fmt.Errorf("read migration ledger for %s: %w", migration.version, err)
@@ -83,6 +112,65 @@ func Migrate(db *gorm.DB) error {
 		}); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// MigrationStatuses reports every version known to this binary. A database
+// with no ledger is treated as a clean, fully pending target.
+func MigrationStatuses(db *gorm.DB) ([]MigrationStatus, error) {
+	statuses := make([]MigrationStatus, 0, len(migrationSteps))
+	if !db.Migrator().HasTable(&schemaMigration{}) {
+		for _, step := range migrationSteps {
+			statuses = append(statuses, MigrationStatus{Version: step.version})
+		}
+		return statuses, nil
+	}
+	var applied []schemaMigration
+	if err := db.Order("applied_at ASC").Find(&applied).Error; err != nil {
+		return nil, fmt.Errorf("read migration ledger: %w", err)
+	}
+	byVersion := make(map[string]time.Time, len(applied))
+	for _, item := range applied {
+		byVersion[item.Version] = item.AppliedAt.UTC()
+	}
+	for _, step := range migrationSteps {
+		status := MigrationStatus{Version: step.version}
+		if appliedAt, ok := byVersion[step.version]; ok {
+			status.Applied = true
+			status.AppliedAt = &appliedAt
+		}
+		statuses = append(statuses, status)
+	}
+	return statuses, nil
+}
+
+func widenMigrationLedgerVersion(db *gorm.DB) error {
+	var column struct {
+		DataType      string `gorm:"column:data_type"`
+		MaximumLength *int64 `gorm:"column:character_maximum_length"`
+	}
+	if err := db.Raw(`
+		SELECT data_type, character_maximum_length
+		FROM information_schema.columns
+		WHERE table_schema = current_schema()
+		  AND table_name = 'hotelmate_schema_migrations'
+		  AND column_name = 'version'
+	`).Scan(&column).Error; err != nil {
+		return fmt.Errorf("inspect migration ledger version column: %w", err)
+	}
+	if column.DataType == "" {
+		return fmt.Errorf("inspect migration ledger version column: column not found")
+	}
+	if column.MaximumLength == nil || *column.MaximumLength >= schemaMigrationVersionSize {
+		return nil
+	}
+	statement := fmt.Sprintf(
+		"ALTER TABLE hotelmate_schema_migrations ALTER COLUMN version TYPE varchar(%d)",
+		schemaMigrationVersionSize,
+	)
+	if err := db.Exec(statement).Error; err != nil {
+		return fmt.Errorf("widen migration ledger version column: %w", err)
 	}
 	return nil
 }

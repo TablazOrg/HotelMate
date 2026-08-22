@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -142,6 +143,22 @@ func TestHealthHandler(t *testing.T) {
 	}
 	if got := res.Header().Get("X-Request-ID"); got != "health-check-123" {
 		t.Fatalf("valid request id was not preserved: %q", got)
+	}
+}
+
+func TestPrometheusMetricsExposeBoundedRoutePatterns(t *testing.T) {
+	handler := NewHandler(Dependencies{Version: "test", AllowedOrigins: []string{"*"}})
+	health := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	handler.ServeHTTP(httptest.NewRecorder(), health)
+	request := httptest.NewRequest(http.MethodGet, "/metrics", nil)
+	response := httptest.NewRecorder()
+	handler.ServeHTTP(response, request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("metrics status = %d", response.Code)
+	}
+	body := response.Body.String()
+	if !strings.Contains(body, "hotelmate_build_info{version=\"test\"} 1") || !strings.Contains(body, "pattern=\"GET /healthz\"") {
+		t.Fatalf("unexpected metrics body: %s", body)
 	}
 }
 

@@ -9,12 +9,14 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+	_ "time/tzdata"
 
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/config"
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
 	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/httpapi"
+	"github.com/TablazOrg/HotelMate/backend/internal/observability"
 	"github.com/TablazOrg/HotelMate/backend/internal/realtime"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 )
@@ -60,6 +62,7 @@ func main() {
 		logger.Error("initialize document storage", "error", err)
 		os.Exit(1)
 	}
+	metrics := observability.New(cfg.APIVersion, cfg.ReleaseCommit, cfg.ReleaseImage)
 
 	server := &http.Server{
 		Addr: cfg.HTTPAddr,
@@ -70,6 +73,7 @@ func main() {
 			DocumentMaxBytes: cfg.DocumentMaxBytes, DocumentRetention: cfg.DocumentRetention,
 			ChatRetention: cfg.ChatRetention, ChatConfidence: cfg.ChatConfidence,
 			EnableHSTS: cfg.EnableHSTS,
+			Metrics:    metrics,
 		}),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
@@ -79,7 +83,7 @@ func main() {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("api listening", "address", cfg.HTTPAddr, "environment", cfg.Environment)
+		logger.Info("api listening", "address", cfg.HTTPAddr, "environment", cfg.Environment, "release", cfg.APIVersion, "commit", cfg.ReleaseCommit, "image", cfg.ReleaseImage)
 		serverErr <- server.ListenAndServe()
 	}()
 

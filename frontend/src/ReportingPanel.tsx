@@ -65,7 +65,7 @@ export function ReportingPanel({ token }: { token: string }) {
 }
 
 const actionLabels: Record<string, string> = {
-  'staff.login': 'ورود پرسنل', 'guest.login': 'ورود مهمان', 'hotel.onboard': 'راه‌اندازی هتل',
+  'auth.staff.login': 'ورود پرسنل', 'auth.guest.login': 'ورود مهمان', 'hotel.onboard': 'راه‌اندازی هتل',
   'service_request.create': 'ثبت درخواست', 'service_request.transition': 'تغییر وضعیت درخواست',
   'conversation.message': 'پیام مهمان', 'conversation.reply': 'پاسخ پذیرش', 'knowledge.review': 'بازبینی دانش',
 }

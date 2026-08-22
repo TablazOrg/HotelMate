@@ -1381,7 +1381,7 @@ components:
         reviewedById: { type: [string, 'null'], format: uuid }
         reviewNote: { type: string }
         retentionUntil: { type: string, format: date-time }
-        documentAvailable: { type: boolean }
+        documentAvailable: { type: boolean, description: True while the private document is retained; download remains restricted to authorized staff. }
     OnlineCheckInWithStay:
       allOf:
         - $ref: '#/components/schemas/OnlineCheckIn'

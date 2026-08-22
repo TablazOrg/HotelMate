@@ -15,6 +15,8 @@ type Config struct {
 	Environment       string
 	HTTPAddr          string
 	APIVersion        string
+	ReleaseCommit     string
+	ReleaseImage      string
 	DatabaseURL       string
 	JWTSecret         string
 	JWTIssuer         string
@@ -32,24 +34,34 @@ type Config struct {
 }
 
 func Load() Config {
+	return LoadFrom(os.Getenv)
+}
+
+// LoadFrom resolves application configuration with the supplied lookup
+// function. The operations CLI uses this to apply the documented precedence
+// of flags, environment variables, and a protected config file without
+// mutating the process environment.
+func LoadFrom(getenv func(string) string) Config {
 	return Config{
-		Environment:       envOrDefault("APP_ENV", "development"),
-		HTTPAddr:          envOrDefault("API_HTTP_ADDR", ":8080"),
-		APIVersion:        envOrDefault("API_VERSION", "1.0.0"),
-		DatabaseURL:       envOrDefault("DATABASE_URL", "postgres://hotelmate:hotelmate@localhost:5432/hotelmate?sslmode=disable"),
-		JWTSecret:         envOrDefault("JWT_SECRET", "replace-this-development-secret-now"),
-		JWTIssuer:         envOrDefault("JWT_ISSUER", "hotelmate-api"),
-		StaffTokenTTL:     durationEnv("STAFF_TOKEN_TTL", 8*time.Hour),
-		GuestTokenTTL:     durationEnv("GUEST_TOKEN_TTL", 24*time.Hour),
-		OnboardingToken:   envOrDefault("ONBOARDING_TOKEN", "replace-this-onboarding-token"),
-		UploadsDir:        envOrDefault("UPLOADS_DIR", "uploads"),
-		DocumentMaxBytes:  int64Env("DOCUMENT_MAX_BYTES", 5*1024*1024),
-		DocumentRetention: durationEnv("DOCUMENT_RETENTION", 720*time.Hour),
-		ChatRetention:     durationEnv("CHAT_RETENTION", 2160*time.Hour),
-		ChatConfidence:    float64Env("CHAT_CONFIDENCE_THRESHOLD", 0.5),
-		AllowedOrigins:    csvEnv("ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
-		AutoMigrate:       boolEnv("AUTO_MIGRATE", true),
-		EnableHSTS:        boolEnv("ENABLE_HSTS", strings.EqualFold(envOrDefault("APP_ENV", "development"), "production")),
+		Environment:       envOrDefault(getenv, "APP_ENV", "development"),
+		HTTPAddr:          envOrDefault(getenv, "API_HTTP_ADDR", ":8080"),
+		APIVersion:        envOrDefault(getenv, "API_VERSION", "1.0.0"),
+		ReleaseCommit:     envOrDefault(getenv, "RELEASE_COMMIT", "unknown"),
+		ReleaseImage:      envOrDefault(getenv, "RELEASE_IMAGE", "unknown"),
+		DatabaseURL:       envOrDefault(getenv, "DATABASE_URL", "postgres://hotelmate:hotelmate@127.0.0.1:5432/hotelmate?sslmode=disable"),
+		JWTSecret:         envOrDefault(getenv, "JWT_SECRET", "replace-this-development-secret-now"),
+		JWTIssuer:         envOrDefault(getenv, "JWT_ISSUER", "hotelmate-api"),
+		StaffTokenTTL:     durationEnv(getenv, "STAFF_TOKEN_TTL", 8*time.Hour),
+		GuestTokenTTL:     durationEnv(getenv, "GUEST_TOKEN_TTL", 24*time.Hour),
+		OnboardingToken:   envOrDefault(getenv, "ONBOARDING_TOKEN", "replace-this-onboarding-token"),
+		UploadsDir:        envOrDefault(getenv, "UPLOADS_DIR", "uploads"),
+		DocumentMaxBytes:  int64Env(getenv, "DOCUMENT_MAX_BYTES", 5*1024*1024),
+		DocumentRetention: durationEnv(getenv, "DOCUMENT_RETENTION", 720*time.Hour),
+		ChatRetention:     durationEnv(getenv, "CHAT_RETENTION", 2160*time.Hour),
+		ChatConfidence:    float64Env(getenv, "CHAT_CONFIDENCE_THRESHOLD", 0.5),
+		AllowedOrigins:    csvEnv(getenv, "ALLOWED_ORIGINS", []string{"http://localhost:3000", "http://localhost:5173"}),
+		AutoMigrate:       boolEnv(getenv, "AUTO_MIGRATE", true),
+		EnableHSTS:        boolEnv(getenv, "ENABLE_HSTS", strings.EqualFold(envOrDefault(getenv, "APP_ENV", "development"), "production")),
 	}
 }
 
@@ -80,15 +92,15 @@ func (c Config) Validate() error {
 	return nil
 }
 
-func envOrDefault(key, fallback string) string {
-	if value := strings.TrimSpace(os.Getenv(key)); value != "" {
+func envOrDefault(getenv func(string) string, key, fallback string) string {
+	if value := strings.TrimSpace(getenv(key)); value != "" {
 		return value
 	}
 	return fallback
 }
 
-func csvEnv(key string, fallback []string) []string {
-	value := strings.TrimSpace(os.Getenv(key))
+func csvEnv(getenv func(string) string, key string, fallback []string) []string {
+	value := strings.TrimSpace(getenv(key))
 	if value == "" {
 		return fallback
 	}
@@ -105,8 +117,8 @@ func csvEnv(key string, fallback []string) []string {
 	return result
 }
 
-func boolEnv(key string, fallback bool) bool {
-	value := strings.TrimSpace(os.Getenv(key))
+func boolEnv(getenv func(string) string, key string, fallback bool) bool {
+	value := strings.TrimSpace(getenv(key))
 	if value == "" {
 		return fallback
 	}
@@ -117,8 +129,8 @@ func boolEnv(key string, fallback bool) bool {
 	return parsed
 }
 
-func durationEnv(key string, fallback time.Duration) time.Duration {
-	value := strings.TrimSpace(os.Getenv(key))
+func durationEnv(getenv func(string) string, key string, fallback time.Duration) time.Duration {
+	value := strings.TrimSpace(getenv(key))
 	if value == "" {
 		return fallback
 	}
@@ -129,8 +141,8 @@ func durationEnv(key string, fallback time.Duration) time.Duration {
 	return parsed
 }
 
-func int64Env(key string, fallback int64) int64 {
-	value := strings.TrimSpace(os.Getenv(key))
+func int64Env(getenv func(string) string, key string, fallback int64) int64 {
+	value := strings.TrimSpace(getenv(key))
 	if value == "" {
 		return fallback
 	}
@@ -141,8 +153,8 @@ func int64Env(key string, fallback int64) int64 {
 	return parsed
 }
 
-func float64Env(key string, fallback float64) float64 {
-	value := strings.TrimSpace(os.Getenv(key))
+func float64Env(getenv func(string) string, key string, fallback float64) float64 {
+	value := strings.TrimSpace(getenv(key))
 	if value == "" {
 		return fallback
 	}

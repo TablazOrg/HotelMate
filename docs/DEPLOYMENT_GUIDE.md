@@ -1,83 +1,88 @@
-# HotelMate production deployment guide
+# HotelMate staging and production deployment
 
-This guide prepares a single Linux VPS deployment with PostgreSQL, the Go API, the React build, Nginx, and an existing Let's Encrypt certificate. A real public deployment additionally needs a VPS, DNS name, SSH access, and certificate; those external resources are not stored in this repository.
+The M7 release path deploys immutable API/web image digests to a hardened single-host Compose environment. It does not build application images on a server. A public rollout requires the approved values in [ADR-0007](adr/0007-platform-operations-decisions.md); this repository contains no provider account, domain, SSH key, secret, or alert recipient.
 
-## 1. Server prerequisites
+## 1. Approve and provision external resources
 
-- Ubuntu 24.04 or a comparable maintained Linux distribution
-- Docker Engine with the Compose plugin
-- A DNS `A`/`AAAA` record pointing the chosen domain to the server
-- Ports 22, 80, and 443 allowed in the firewall
-- A Let's Encrypt certificate under `/etc/letsencrypt/live/<domain>`
+Approve provider/region/residency/budget, domains/DNS/TLS ownership, RPO/RTO/retention/document recovery, environments/approvers, registry/secrets/restic destination, monitoring/paging owners, and access/break-glass policy.
 
-Obtain the initial certificate before starting the TLS profile, for example with Certbot standalone while port 80 is free. Certificate issuance and renewal are server administration operations and should be automated by the operator.
+Create staging and production Ubuntu 24.04 hosts and DNS records. Obtain the first ACME certificates under `/etc/letsencrypt/live/<domain>` and configure automated renewal. Only approved SSH, HTTP, and HTTPS may be reachable; PostgreSQL binds to host loopback and the Compose network.
 
-## 2. Configure secrets
+## 2. Apply the versioned host baseline
+
+Install the listed Ansible collections, create real ignored `group_vars/all.yml` and Vault-encrypted `group_vars/all/vault.yml`, supply the release-built CLI path, and run:
 
 ```bash
-cp .env.production.example .env.production
-chmod 600 .env.production
+cd infra/ansible
+ansible-galaxy collection install -r requirements.yml
+ansible-playbook -i inventory.yml playbook.yml --ask-vault-pass \
+  -e hotelmate_cli_artifact=/absolute/path/hotelmate-linux-amd64 \
+  -e hotelmate_cosign_artifact=/absolute/path/cosign-linux-amd64
 ```
 
-Replace every placeholder. Generate independent random values for the database password, `JWT_SECRET`, and `ONBOARDING_TOKEN`. Because the database password is embedded in a PostgreSQL URL by Compose, use URL-safe characters or percent-encode reserved characters. Set `DOMAIN` and `ALLOWED_ORIGINS=https://<domain>`.
+The playbook creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic tooling, protected runtime directories/config, and systemd backup/privacy-retention timers. Production intentionally refuses to configure while the alert receiver is unapproved.
 
-The API rejects placeholder or short production secrets at startup.
+Copy reviewed runtime files to `/srv/hotelmate`, including production and observability Compose files, `ops/observability`, and the frontend Nginx template as packaged by the release process. `docker-compose.production.yml` requires `HOTELMATE_API_IMAGE` and `HOTELMATE_WEB_IMAGE`; the CLI writes them from the release manifest into a mode-`600` managed file.
 
-## 3. Deploy
+## 3. Configure GitHub environments
+
+Create `staging` and `production` environments. Require the approved production reviewers and prevent self-review where policy requires it. Configure:
+
+- Environment secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, pinned `DEPLOY_KNOWN_HOSTS`, smoke credentials, and the staging-only acceptance onboarding token.
+- Environment variables: `DEPLOY_PATH`, `CONFIG_FILE`, and `BASE_URL`.
+- Package permission for GHCR and branch protection requiring every CI job.
+
+The main-branch release workflow builds each image once, publishes by commit tag, scans it, emits maximum provenance and SPDX SBOMs, signs image/SBOM attestations, verifies them, and creates `hotelmate.release/v1`. It deploys staging automatically after CI and reaches production only through the protected environment. A manual emergency dispatch follows the same gates.
+
+## 4. Manual preflight and deployment
+
+The workflow normally owns promotion. An authorized manual run uses the exact release bundle:
 
 ```bash
-docker compose --env-file .env.production -f docker-compose.production.yml config --quiet
-docker compose --env-file .env.production -f docker-compose.production.yml build
-docker compose --env-file .env.production -f docker-compose.production.yml up -d
-docker compose --env-file .env.production -f docker-compose.production.yml ps
+hotelmate --config /etc/hotelmate/production.env \
+  --release-file /srv/hotelmate/incoming/release.json deploy preflight
+
+hotelmate --config /etc/hotelmate/production.env \
+  --release-file /srv/hotelmate/incoming/release.json deploy apply --yes
+
+hotelmate --config /etc/hotelmate/production.env deploy status --json
 ```
 
-Verify:
+Preflight validates secret-safe application config, protected file modes, digest references, registry access, cosign image signatures and SPDX attestations, Compose rendering, off-host backup configuration, and tooling. Apply takes the environment lock, creates/verifies/transfers the production checkpoint, pulls digests, starts PostgreSQL, runs `hotelmate migrate up`, activates API/web, runs smoke, and records timestamped evidence. Failed activation/smoke attempts application rollback to the prior manifest.
+
+Run the stateful acceptance suite only in staging because it creates dedicated tenants:
 
 ```bash
-curl -fsS https://<domain>/healthz
-curl -fsS https://<domain>/readyz
-./scripts/smoke.sh https://<domain>
+ACCEPTANCE_ONBOARDING_TOKEN='<staging-only-token>' \
+  hotelmate --base-url https://staging.example.com acceptance
 ```
 
-## 4. Create the first hotel
+Production runs public and dedicated-account authenticated smoke. The acceptance suite covers onboarding defaults, RBAC/tenant isolation, reservation/stay lifecycle, paid ordering, private documents, AI handoff, fulfillment, reporting/audits, checkout, and expired-session rejection.
 
-Call `POST /api/v1/onboarding/hotels` once with the `X-Onboarding-Token` header. The request schema and response are defined in `docs/openapi.yaml`. Keep this token out of browser code and rotate it after initial onboarding when operational policy requires it.
+## 5. Rollback
 
-## 5. Updates and rollback
+Select the last known-good manifest from evidence, confirm its compatibility with applied additive migrations, then run:
 
-Before an update, take a PostgreSQL backup and retain the currently deployed Git commit/image. Then pull the reviewed commit, build, and run `up -d`. The application records applied schema versions in `hotelmate_schema_migrations`.
-
-M1 through M6 use additive migrations. M3 adds and backfills tenant-safe service codes, derives `service_requests.hotel_id` from each stay, converts the legacy assignment column to UUID, creates persisted request events, and seeds missing core services per hotel. M4 adds paid/pre-arrival service metadata and hotel content fields, then seeds missing revenue services and starter content per hotel. M5 adds conversation read/assignment/retention state plus versioned knowledge moderation and seeds six approved starter topics for hotels without knowledge. M6 adds request correlation to the audit schema through `2026082206_reporting_hardening`. Run `/app/migrate` twice in staging before deployment to rehearse and prove idempotence. An M0 development volume may still contain the obsolete plaintext `guests.identity_number` column and global staff email constraint. Do not remove either automatically on a database that may contain data; inspect and migrate that volume explicitly first.
-
-## 6. WebSocket delivery
-
-Nginx proxies `/api/v1/events` through the existing `/api/` location with HTTP/1.1 upgrade headers and a read timeout longer than the API heartbeat. Browser clients connect with `wss://<domain>/api/v1/events` and provide `hotelmate.events` plus the current JWT as WebSocket subprotocol values. Keep `ALLOWED_ORIGINS` aligned with the public HTTPS origin.
-
-Persisted request history from the REST API is authoritative after reconnecting. The bundled realtime hub is process-local, so deploy one API replica for M3. Add a shared pub/sub transport before scaling the API horizontally.
-
-## 7. Private document retention
-
-Online check-in documents are written to the private `uploads-production` volume and are never served by Nginx. Keep `DOCUMENT_MAX_BYTES` and `DOCUMENT_RETENTION` explicit in `.env.production`; the default retention is 720 hours after the later of submission or scheduled departure.
-
-Schedule the purge command at least daily from the deployment directory. For example, an operator-owned cron entry can run:
-
-```cron
-17 3 * * * cd /srv/HotelMate && docker compose --env-file .env.production -f docker-compose.production.yml run --rm --entrypoint /app/purge-documents api >> /var/log/hotelmate-document-purge.log 2>&1
+```bash
+hotelmate --config /etc/hotelmate/production.env \
+  --release-file /srv/hotelmate/releases/known-good.json deploy rollback --yes
 ```
 
-Run `make purge-documents` for the local Compose stack. The command deletes only documents whose stored retention deadline has passed and then marks their metadata deleted. Monitor failures; do not expose or manually sweep the volume as a substitute for this workflow.
+This changes API/web images and verifies smoke. It does not reverse database migrations. Use a reviewed forward fix or [recovery procedure](BACKUP_RESTORE.md) when schema/data repair is required.
 
-## 8. Backups and restore rehearsal
+## 6. Monitoring, schedules, and retention
 
-Run `./scripts/backup.sh /absolute/private/backup/path` from the deployment directory. It writes a PostgreSQL custom-format dump with mode-restrictive defaults plus a SHA-256 checksum. Store the output on encrypted storage outside the Docker host/volume and schedule it with the operator's job runner. The private document adapter remains backed by the `uploads-production` volume on a single VPS; if policy requires document recovery, separately encrypt and access-control that volume backup and expire copies in line with document retention.
+Start production plus the private operations profile after replacing the external probe placeholder and configuring the approved Alertmanager receiver:
 
-Restoration replaces matching database objects and therefore requires the explicit `--confirm` argument. Stop the API, verify the target environment and checksum, run the guarded restore script, start the API, and execute the smoke checks. The exact drill is in `docs/BACKUP_RESTORE.md`. Test it in an isolated environment at least quarterly and before a major schema rollout.
+```bash
+docker compose --env-file /etc/hotelmate/production.env \
+  -f docker-compose.production.yml -f docker-compose.observability.yml up -d
+```
 
-## 9. Conversation privacy and retention
+Prometheus, Grafana, and Alertmanager bind to loopback for SSH tunnel/VPN access. Validate every rule in staging. The API remains one replica because realtime fanout is process-local.
 
-Set `CHAT_RETENTION` to the approved privacy period and `CHAT_CONFIDENCE_THRESHOLD` between 0 and 1. The default is 90 days and 0.5. Schedule `/app/purge-messages` at least daily, using the same Compose pattern as the document purge. This command performs a hard delete of expired message bodies; monitor its exit status. Keep the bundled deterministic provider unless an external provider has completed a separate data-protection, prompt-safety, and credential review.
+Systemd runs a daily recovery set and daily document/message purges. Confirm with `systemctl list-timers 'hotelmate-*'`, inspect each unit result, and verify Prometheus job-freshness metrics. Document/message retention settings remain explicit in the protected environment.
 
-## 10. Security and observability
+## 7. Operational acceptance
 
-Keep `ENABLE_HSTS=true` only behind working HTTPS. Nginx and the API emit the release security headers. All API responses include `X-Request-ID`; use it to correlate browser errors, structured API logs, and administrator audit entries. The in-memory API limits are a single-replica safeguard. Add an edge/shared rate limiter before horizontal scaling. Alert on readiness failures, repeated HTTP 5xx responses, failed purge/backup jobs, and increases in failed security events.
+Before calling M7 complete, retain evidence of clean Ansible re-provisioning, no unexpected infrastructure/config drift, same digest in staging/production, restore within approved RPO/RTO, deploy and failed-deploy rollback, DNS/TLS renewal, firewall/access review, patching, disk capacity, central logs/metrics retention, every alert route, and the incident exercises in [OPERATIONS_RUNBOOK.md](OPERATIONS_RUNBOOK.md).

@@ -64,6 +64,50 @@ Delivered with one stay-scoped conversation per guest, persisted guest/AI/staff/
 
 Delivered with tenant- and role-scoped operational/revenue reports, hotel-timezone date ranges, server-authoritative IRR totals, active-room and reception-handoff metrics, paginated audit administration, correlation IDs in responses/logs/audits, layered API and mutation rate limits, API and Nginx security headers, an additive reporting-hardening migration, repeatable migration rehearsal in CI, guarded PostgreSQL backup/restore scripts, TLS deployment guidance, and public plus authenticated smoke checks. The existing private document storage was already isolated behind `documents.Storage`; local volume storage remains the development/single-VPS adapter. The reporting and security UI extends the supplied handoff's RTL admin system rather than introducing a separate visual language.
 
+## M7 — Platform operations, CLI, CI/CD, backup, and infrastructure (in progress)
+
+- Consolidate operational commands into a tested `hotelmate` CLI with human-readable and JSON output, stable exit codes, configuration validation, safe dry runs, and secret-safe logging.
+- Turn the existing CI workflow into a supply-chain-aware delivery pipeline that builds immutable OCI images once, publishes signed artifacts and SBOMs, deploys to staging, and promotes the same image digest to production through an approval gate.
+- Automate encrypted, off-host PostgreSQL and private-upload backups with retention, integrity checks, failure alerts, restore rehearsals, and measured recovery objectives.
+- Select and codify the hosting provider, environments, DNS/TLS, networking, secrets, storage, observability, security, capacity, and disaster-recovery architecture through versioned infrastructure as code and architecture decisions.
+- Prove zero-guesswork deployment and recovery with staging acceptance, production smoke checks, rollback rehearsal, and an isolated restore drill.
+
+Delivered in the repository with the unified Go operations CLI and JSON/exit-code contract; digest-pinned production Compose; pinned, scan-gated, SBOM/provenance/signing release automation; staging-to-protected-production promotion; checksummed PostgreSQL/private-upload recovery manifests with optional encrypted restic transfer and scheduled retention; deploy locks, evidence, and application rollback; Prometheus/Grafana/Alertmanager monitoring; and an Ansible host-hardening baseline. Local validation and a real PostgreSQL dump/catalog check are complete.
+
+The detailed discovery, work packages, required owner decisions, dependencies, and acceptance gates are defined in [M7 platform operations and infrastructure](MILESTONE_7_PLATFORM_OPERATIONS.md). M7 remains in progress until [ADR-0007](adr/0007-platform-operations-decisions.md) is approved and a real staging/production promotion, encrypted off-host recovery set, isolated restore drill, DNS/TLS renewal, alert route test, rollback rehearsal, and measured RPO/RTO have produced evidence.
+
+## M8 — Online check-in 2.0 and arrival readiness (planned)
+
+- Replace the single-document pre-arrival flow with a resumable, configurable check-in journey covering guest and companion details, arrival plans, per-guest documents, consent, versioned e-signature, custom questions, preferences, and reception review.
+- Add secure reservation links and QR entry, step-level progress and recovery, room-ready waiting state, exception handling, and an arrivals workspace that shows readiness instead of only document status.
+- Instrument completion, abandonment, review, and front-desk handling time while preserving tenant isolation, data minimization, document retention, and explicit approval gates.
+
+## M9 — Guest and staff experience redesign (planned)
+
+- Build a shared accessible design system and lifecycle-aware information architecture for pre-arrival, in-stay, checkout, reception, and department operations.
+- Improve service discovery and ordering with search, categories, details, quantities, modifiers, scheduling, confirmation, active/history tracking, and recovery from loading or network failures.
+- Add responsive tablet/desktop use, Persian/English/Arabic localization readiness, installable web-app behavior, performance budgets, usability testing, and WCAG 2.2 AA verification.
+
+## M10 — Lifecycle communication and personalization (planned)
+
+- Add consent-aware, localized booking-to-post-stay communication through provider adapters for in-app, email, SMS, and WhatsApp, with templates, triggers, retries, fallbacks, opt-out handling, and delivery evidence.
+- Unify automated and human conversations in a role-aware inbox with ownership, SLA state, guest context, notification preferences, and escalation.
+- Personalize shortcuts, content, and offers by stay stage and approved guest preferences without exposing sensitive profile data to unrelated staff roles.
+
+## M11 — Commerce, payments, upsells, and digital checkout (planned)
+
+- Add inventory- and schedule-aware upsells, order modifiers, baskets, room upgrades, early arrival, late checkout, and transparent taxes/fees.
+- Introduce a PCI-scoped payment-provider boundary for payment links, deposits/holds, idempotent webhooks, refunds, reconciliation, and folio-safe accounting without storing raw card data.
+- Deliver digital checkout with bill review, payment state, invoice/receipt, issue escalation, feedback, and service-recovery routing.
+
+## M12 — Hospitality integrations, automation, and journey intelligence (planned)
+
+- Build observable, replayable connector contracts for PMS/CRS, POS, CRM, channel managers, payment providers, and mobile-key systems.
+- Coordinate reservation, folio, room-readiness, task, order, and key-release events through idempotent sync and explicit human exception queues.
+- Add end-to-end journey funnels, service SLAs, revenue attribution, segmentation, cohort reporting, and controlled experimentation with privacy-safe analytics.
+
+The benchmark, current-state UX audit, detailed scope, sequencing, product measures, and acceptance gates for M8–M12 are defined in [Product improvement milestones](PRODUCT_IMPROVEMENT_MILESTONES.md).
+
 ## Definition of done for each milestone
 
 Each milestone is complete when its API contract, database migration, role/tenant authorization, React flow, automated tests, and local Docker path are present. UI-only or schema-only work does not close a milestone.

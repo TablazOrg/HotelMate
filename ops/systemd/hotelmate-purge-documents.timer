@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the HotelMate private-document purge every day
+
+[Timer]
+OnCalendar=*-*-* 03:17:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+Unit=hotelmate-purge-documents.service
+
+[Install]
+WantedBy=timers.target

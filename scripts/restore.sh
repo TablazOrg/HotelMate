@@ -17,6 +17,8 @@ if [ ! -f "$backup_file" ]; then
   exit 2
 fi
 
-docker compose --env-file .env.production -f docker-compose.production.yml exec -T postgres \
-  sh -c 'exec pg_restore --clean --if-exists --no-owner --no-privileges -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$backup_file"
-echo "restore complete; run ./scripts/smoke.sh https://your-domain.example"
+if command -v hotelmate >/dev/null 2>&1; then
+  exec hotelmate --manifest "$backup_file" backup restore --yes
+fi
+cd "$(dirname "$0")/../backend"
+exec go run ./cmd/hotelmate --manifest "$backup_file" backup restore --yes

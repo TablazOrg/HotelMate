@@ -1,0 +1,33 @@
+hotelmate_deploy_user: hotelmate
+hotelmate_deploy_root: /srv/hotelmate
+hotelmate_private_root: /srv/hotelmate-private
+hotelmate_ssh_public_keys:
+  - ssh-ed25519 REPLACE_WITH_APPROVED_OPERATOR_KEY
+hotelmate_ssh_port: 22
+hotelmate_metrics_retention: 30d
+hotelmate_alert_receiver_configured: false
+
+# Vault-encrypt the real values in group_vars/all/vault.yml. Never commit them.
+hotelmate_production_env: |
+  APP_ENV={{ hotelmate_environment }}
+  DOMAIN={{ hotelmate_domain }}
+  HOTELMATE_BASE_URL=https://{{ hotelmate_domain }}
+  HOTELMATE_COMPOSE_FILE={{ hotelmate_deploy_root }}/docker-compose.production.yml
+  HOTELMATE_ENV_FILE=/etc/hotelmate/production.env
+  HOTELMATE_BACKUP_DIR={{ hotelmate_private_root }}/backups
+  HOTELMATE_EVIDENCE_DIR={{ hotelmate_private_root }}/evidence
+  HOTELMATE_HOST_UPLOADS_DIR={{ hotelmate_private_root }}/uploads
+  HOTELMATE_TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
+  DATABASE_URL={{ vault_hotelmate_database_url }}
+  POSTGRES_DB={{ vault_postgres_db }}
+  POSTGRES_USER={{ vault_postgres_user }}
+  POSTGRES_PASSWORD={{ vault_postgres_password }}
+  JWT_SECRET={{ vault_jwt_secret }}
+  ONBOARDING_TOKEN={{ vault_onboarding_token }}
+  ALLOWED_ORIGINS=https://{{ hotelmate_domain }}
+  RESTIC_REPOSITORY={{ vault_restic_repository }}
+  RESTIC_PASSWORD={{ vault_restic_password }}
+  GRAFANA_ADMIN_USER={{ vault_grafana_admin_user }}
+  GRAFANA_ADMIN_PASSWORD={{ vault_grafana_admin_password }}
+  COSIGN_CERTIFICATE_IDENTITY=https://github.com/TablazOrg/HotelMate/.github/workflows/release.yml@refs/heads/main
+  COSIGN_CERTIFICATE_OIDC_ISSUER=https://token.actions.githubusercontent.com

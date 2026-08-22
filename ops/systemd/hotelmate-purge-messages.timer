@@ -1,0 +1,11 @@
+[Unit]
+Description=Run the HotelMate expired-message purge every day
+
+[Timer]
+OnCalendar=*-*-* 03:37:00 UTC
+RandomizedDelaySec=10m
+Persistent=true
+Unit=hotelmate-purge-messages.service
+
+[Install]
+WantedBy=timers.target

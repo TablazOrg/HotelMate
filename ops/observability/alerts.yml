@@ -1,0 +1,88 @@
+groups:
+  - name: hotelmate-service
+    rules:
+      - alert: HotelMateExternalUnavailable
+        expr: probe_success{job="hotelmate-external"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: HotelMate external HTTPS check is failing
+
+      - alert: HotelMateAPIReadinessFailed
+        expr: hotelmate_ready == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: HotelMate cannot reach PostgreSQL
+
+      - alert: HotelMateHighHTTPErrorRate
+        expr: sum(rate(hotelmate_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(hotelmate_http_requests_total[5m])), 0.001) > 0.02
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: More than 2% of HotelMate requests return 5xx
+
+      - alert: HotelMateHighLatency
+        expr: histogram_quantile(0.99, sum by (le) (rate(hotelmate_http_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: API p99 latency exceeds one second
+
+      - alert: HotelMateCertificateExpiresSoon
+        expr: probe_ssl_earliest_cert_expiry{job="hotelmate-external"} - time() < 14 * 24 * 3600
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: HotelMate TLS certificate expires within 14 days
+
+  - name: hotelmate-platform
+    rules:
+      - alert: HotelMateBackupStale
+        expr: absent(hotelmate_job_last_success_timestamp_seconds{job="backup"}) or (time() - hotelmate_job_last_success_timestamp_seconds{job="backup"} > 26 * 3600)
+        for: 15m
+        labels: { severity: page }
+        annotations:
+          summary: No verified HotelMate backup has completed in 26 hours
+
+      - alert: HotelMateRetentionJobStale
+        expr: absent(hotelmate_job_last_success_timestamp_seconds{job=~"purge_.*"}) or (time() - hotelmate_job_last_success_timestamp_seconds{job=~"purge_.*"} > 26 * 3600)
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: A HotelMate privacy-retention purge is stale
+
+      - alert: HotelMateHostDiskPressure
+        expr: node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"} < 0.15
+        for: 10m
+        labels: { severity: page }
+        annotations:
+          summary: Host filesystem has less than 15% free space
+
+      - alert: HotelMateHostInodePressure
+        expr: node_filesystem_files_free{fstype!~"tmpfs|overlay"} / node_filesystem_files{fstype!~"tmpfs|overlay"} < 0.15
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: Host filesystem has less than 15% free inodes
+
+      - alert: HotelMateContainerRestarting
+        expr: changes(container_start_time_seconds{name=~".*(api|web|postgres).*"}[15m]) > 0
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: A HotelMate container is restarting
+
+      - alert: HotelMatePostgresExporterDown
+        expr: up{job="postgres"} == 0
+        for: 2m
+        labels: { severity: page }
+        annotations:
+          summary: PostgreSQL metrics are unavailable
+
+      - alert: HotelMateCentralLogsDown
+        expr: up{job="loki"} == 0
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: HotelMate central log retention is unavailable

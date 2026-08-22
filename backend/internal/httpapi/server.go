@@ -15,6 +15,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/concierge"
 	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
+	"github.com/TablazOrg/HotelMate/backend/internal/observability"
 	"github.com/TablazOrg/HotelMate/backend/internal/realtime"
 	"github.com/TablazOrg/HotelMate/backend/internal/store"
 	"gorm.io/gorm"
@@ -41,6 +42,7 @@ type Dependencies struct {
 	ChatRetention     time.Duration
 	ChatConfidence    float64
 	EnableHSTS        bool
+	Metrics           *observability.Metrics
 }
 
 type Server struct {
@@ -68,6 +70,7 @@ type Server struct {
 	chatRetention     time.Duration
 	chatConfidence    float64
 	allowedOrigins    []string
+	metrics           *observability.Metrics
 }
 
 func NewHandler(deps Dependencies) http.Handler {
@@ -84,6 +87,9 @@ func NewHandler(deps Dependencies) http.Handler {
 	}
 	if deps.ChatConfidence <= 0 || deps.ChatConfidence > 1 {
 		deps.ChatConfidence = 0.5
+	}
+	if deps.Metrics == nil {
+		deps.Metrics = observability.New(deps.Version)
 	}
 	s := &Server{
 		db:                deps.DB,
@@ -110,11 +116,13 @@ func NewHandler(deps Dependencies) http.Handler {
 		chatRetention:     deps.ChatRetention,
 		chatConfidence:    deps.ChatConfidence,
 		allowedOrigins:    deps.AllowedOrigins,
+		metrics:           deps.Metrics,
 	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", healthHandler)
 	mux.HandleFunc("GET /readyz", s.readyHandler)
+	mux.Handle("GET /metrics", deps.Metrics.Handler())
 	mux.HandleFunc("GET /api/v1", s.infoHandler)
 	mux.HandleFunc("GET /api/v1/public/hotels/{slug}", s.publicHotel)
 	mux.Handle("POST /api/v1/onboarding/hotels", s.limit(s.onboardLimiter, http.HandlerFunc(s.onboardHotel)))
@@ -133,7 +141,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	s.registerReportingRoutes(mux)
 	s.registerRealtimeRoute(mux)
 
-	return withRequestID(withRecovery(logger, withRequestLog(logger, withSecurityHeaders(deps.EnableHSTS, withCORS(deps.AllowedOrigins, s.limitAPI(mux))))))
+	return withRequestID(withRecovery(logger, withRequestLog(logger, withSecurityHeaders(deps.EnableHSTS, withCORS(deps.AllowedOrigins, deps.Metrics.Middleware(s.limitAPI(mux)))))))
 }
 
 func healthHandler(w http.ResponseWriter, _ *http.Request) {
@@ -142,14 +150,17 @@ func healthHandler(w http.ResponseWriter, _ *http.Request) {
 
 func (s *Server) readyHandler(w http.ResponseWriter, r *http.Request) {
 	if s.db == nil {
+		s.metrics.SetReady(false)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "reason": "database_unavailable"})
 		return
 	}
 	sqlDB, err := s.db.DB()
 	if err != nil || sqlDB.PingContext(r.Context()) != nil {
+		s.metrics.SetReady(false)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"status": "not_ready", "reason": "database_unavailable"})
 		return
 	}
+	s.metrics.SetReady(true)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ready"})
 }
 

@@ -12,6 +12,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/config"
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -64,7 +65,8 @@ func seed(db *gorm.DB, settings demoSettings) error {
 				return err
 			}
 		}
-		for _, service := range models.CoreServices(hotel.ID) {
+		services := append(models.CoreServices(hotel.ID), models.RevenueServices(hotel.ID)...)
+		for _, service := range services {
 			var count int64
 			if err := tx.Model(&models.Service{}).Where("hotel_id = ? AND code = ?", hotel.ID, service.Code).Count(&count).Error; err != nil {
 				return err
@@ -128,8 +130,65 @@ func seed(db *gorm.DB, settings demoSettings) error {
 		} else if err != nil {
 			return err
 		}
+
+		if err := seedHotelContent(tx, hotel.ID); err != nil {
+			return err
+		}
 		return nil
 	})
+}
+
+func seedHotelContent(tx *gorm.DB, hotelID uuid.UUID) error {
+	var facilityCount int64
+	if err := tx.Model(&models.Facility{}).Where("hotel_id = ?", hotelID).Count(&facilityCount).Error; err != nil {
+		return err
+	}
+	if facilityCount == 0 {
+		facilities := models.DefaultFacilities(hotelID)
+		if err := tx.Create(&facilities).Error; err != nil {
+			return err
+		}
+	}
+
+	var promotionCount int64
+	if err := tx.Model(&models.Promotion{}).Where("hotel_id = ?", hotelID).Count(&promotionCount).Error; err != nil {
+		return err
+	}
+	if promotionCount == 0 {
+		promotion := models.DefaultPromotion(hotelID, time.Now().UTC())
+		if err := tx.Create(&promotion).Error; err != nil {
+			return err
+		}
+	}
+
+	var restaurantCount int64
+	if err := tx.Model(&models.Restaurant{}).Where("hotel_id = ?", hotelID).Count(&restaurantCount).Error; err != nil {
+		return err
+	}
+	if restaurantCount == 0 {
+		restaurant, items := models.DefaultRestaurant(hotelID)
+		if err := tx.Create(&restaurant).Error; err != nil {
+			return err
+		}
+		for index := range items {
+			items[index].RestaurantID = restaurant.ID
+		}
+		if err := tx.Create(&items).Error; err != nil {
+			return err
+		}
+	}
+
+	var knowledgeCount int64
+	if err := tx.Model(&models.KnowledgeItem{}).Where("hotel_id = ?", hotelID).Count(&knowledgeCount).Error; err != nil {
+		return err
+	}
+	if knowledgeCount == 0 {
+		knowledge := models.DefaultKnowledge(hotelID, time.Now().UTC())
+		if err := tx.Create(&knowledge).Error; err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func env(key, fallback string) string {

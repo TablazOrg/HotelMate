@@ -1,0 +1,214 @@
+---
+- name: Harden and configure HotelMate hosts
+  hosts: all
+  become: true
+  vars:
+    hotelmate_source_root: "{{ playbook_dir }}/../.."
+  vars_files:
+    - group_vars/all.yml
+    - group_vars/all/vault.yml
+  pre_tasks:
+    - name: Refuse an unapproved alert receiver in production
+      ansible.builtin.assert:
+        that:
+          - hotelmate_environment != 'production' or (hotelmate_alert_receiver_configured | bool and hotelmate_alertmanager_config is defined)
+        fail_msg: Production requires an approved Alertmanager receiver and escalation owner.
+
+  tasks:
+    - name: Install host security and operations packages
+      ansible.builtin.apt:
+        name:
+          - ca-certificates
+          - curl
+          - certbot
+          - docker.io
+          - docker-compose-v2
+          - fail2ban
+          - postgresql-client-16
+          - restic
+          - ufw
+          - unattended-upgrades
+        state: present
+        update_cache: true
+
+    - name: Create the non-root deployment user
+      ansible.builtin.user:
+        name: "{{ hotelmate_deploy_user }}"
+        groups: docker
+        append: true
+        shell: /bin/bash
+        create_home: true
+
+    - name: Install approved operator SSH keys
+      ansible.posix.authorized_key:
+        user: "{{ hotelmate_deploy_user }}"
+        key: "{{ item }}"
+        state: present
+        exclusive: false
+      loop: "{{ hotelmate_ssh_public_keys }}"
+
+    - name: Disable SSH root and password login
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/90-hotelmate-hardening.conf
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          PermitRootLogin no
+          PasswordAuthentication no
+          KbdInteractiveAuthentication no
+          PubkeyAuthentication yes
+          X11Forwarding no
+          AllowUsers {{ hotelmate_deploy_user }}
+      notify: Restart SSH
+
+    - name: Allow SSH, HTTP, and HTTPS only
+      community.general.ufw:
+        rule: allow
+        port: "{{ item }}"
+        proto: tcp
+      loop:
+        - "{{ hotelmate_ssh_port }}"
+        - "80"
+        - "443"
+
+    - name: Enable default-deny firewall policy
+      community.general.ufw:
+        state: enabled
+        direction: incoming
+        policy: deny
+
+    - name: Create deployment, private, configuration, and metric directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: "{{ item.owner | default(hotelmate_deploy_user) }}"
+        group: "{{ item.group | default(hotelmate_deploy_user) }}"
+        mode: "{{ item.mode }}"
+      loop:
+        - { path: "{{ hotelmate_deploy_root }}", mode: "0750" }
+        - { path: "{{ hotelmate_private_root }}", mode: "0700" }
+        - { path: "{{ hotelmate_private_root }}/backups", mode: "0700" }
+        - { path: "{{ hotelmate_private_root }}/evidence", mode: "0700" }
+        - { path: "{{ hotelmate_private_root }}/uploads", mode: "0700" }
+        - { path: /etc/hotelmate, mode: "0700" }
+        - { path: /var/lib/node_exporter/textfile_collector, mode: "0750" }
+
+    - name: Install protected HotelMate environment
+      ansible.builtin.copy:
+        dest: /etc/hotelmate/production.env
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0600"
+        content: "{{ hotelmate_production_env }}"
+      no_log: true
+
+    - name: Install versioned Compose definitions
+      ansible.builtin.copy:
+        src: "{{ hotelmate_source_root }}/{{ item }}"
+        dest: "{{ hotelmate_deploy_root }}/{{ item }}"
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0640"
+      loop:
+        - docker-compose.production.yml
+        - docker-compose.observability.yml
+
+    - name: Install versioned observability configuration
+      ansible.builtin.copy:
+        src: "{{ hotelmate_source_root }}/ops/observability/"
+        dest: "{{ hotelmate_deploy_root }}/ops/observability/"
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        directory_mode: "0750"
+        mode: preserve
+
+    - name: Set the approved external HTTPS probe target
+      ansible.builtin.replace:
+        path: "{{ hotelmate_deploy_root }}/ops/observability/prometheus.yml"
+        regexp: https://hotel\.example\.com
+        replace: "https://{{ hotelmate_domain }}"
+
+    - name: Install the approved alert routing configuration
+      ansible.builtin.copy:
+        dest: "{{ hotelmate_deploy_root }}/ops/observability/alertmanager.yml"
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0600"
+        content: "{{ hotelmate_alertmanager_config }}"
+      when: hotelmate_alertmanager_config is defined
+      no_log: true
+
+    - name: Install the release-built operations CLI
+      ansible.builtin.copy:
+        src: "{{ hotelmate_cli_artifact }}"
+        dest: /usr/local/bin/hotelmate
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install the checksum-verified cosign binary
+      ansible.builtin.copy:
+        src: "{{ hotelmate_cosign_artifact }}"
+        dest: /usr/local/bin/cosign
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install HotelMate systemd units
+      ansible.builtin.copy:
+        src: "{{ hotelmate_source_root }}/ops/systemd/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - hotelmate-backup.service
+        - hotelmate-backup.timer
+        - hotelmate-purge-documents.service
+        - hotelmate-purge-documents.timer
+        - hotelmate-purge-messages.service
+        - hotelmate-purge-messages.timer
+      notify: Reload systemd
+
+    - name: Enable scheduled backup and privacy-retention jobs
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+        daemon_reload: true
+      loop:
+        - hotelmate-backup.timer
+        - hotelmate-purge-documents.timer
+        - hotelmate-purge-messages.timer
+
+    - name: Enable unattended security upgrades
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/20auto-upgrades
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          APT::Periodic::Update-Package-Lists "1";
+          APT::Periodic::Unattended-Upgrade "1";
+          APT::Periodic::AutocleanInterval "7";
+
+    - name: Enable Docker, fail2ban, and time synchronization
+      ansible.builtin.service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop:
+        - docker
+        - fail2ban
+        - systemd-timesyncd
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true

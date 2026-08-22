@@ -1,0 +1,288 @@
+name: Release and deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Optional release version; defaults to a commit-derived version
+        required: false
+        type: string
+      emergency:
+        description: Audited emergency path; scans, signing, backup, and smoke still run
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: hotelmate-release-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    outputs:
+      release_version: ${{ steps.vars.outputs.release_version }}
+      api_image: ${{ steps.vars.outputs.api_image }}
+      web_image: ${{ steps.vars.outputs.web_image }}
+      api_digest: ${{ steps.api.outputs.digest }}
+      web_digest: ${{ steps.web.outputs.digest }}
+    env:
+      RELEASE_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ env.RELEASE_SHA }}
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: '1.25.13'
+          cache-dependency-path: backend/go.sum
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: vars
+        name: Resolve immutable release identity
+        env:
+          REQUESTED_VERSION: ${{ inputs.release_version }}
+        run: |
+          short_sha="${RELEASE_SHA:0:12}"
+          repository="${GITHUB_REPOSITORY,,}"
+          release_version="${REQUESTED_VERSION:-0.7.0-${short_sha}}"
+          {
+            echo "release_version=${release_version}"
+            echo "api_image=ghcr.io/${repository}/api"
+            echo "web_image=ghcr.io/${repository}/web"
+            echo "short_sha=${short_sha}"
+          } >> "$GITHUB_OUTPUT"
+      - id: api
+        name: Build and publish API once
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: backend
+          push: true
+          tags: ${{ steps.vars.outputs.api_image }}:sha-${{ steps.vars.outputs.short_sha }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.release_version }}
+            COMMIT=${{ env.RELEASE_SHA }}
+            BUILD_DATE=${{ github.event.workflow_run.updated_at || github.event.repository.updated_at }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=api-release
+          cache-to: type=gha,mode=max,scope=api-release
+      - id: web
+        name: Build and publish web once
+        uses: docker/build-push-action@263435318d21b8e681c14492fe198d362a7d2c83 # v6.18.0
+        with:
+          context: frontend
+          file: frontend/Dockerfile.production
+          push: true
+          tags: ${{ steps.vars.outputs.web_image }}:sha-${{ steps.vars.outputs.short_sha }}
+          provenance: mode=max
+          sbom: true
+          cache-from: type=gha,scope=web-release
+          cache-to: type=gha,mode=max,scope=web-release
+      - name: Scan published API image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.vars.outputs.api_image }}@${{ steps.api.outputs.digest }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          cache: 'false'
+      - name: Generate API SPDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.vars.outputs.api_image }}@${{ steps.api.outputs.digest }}
+          format: spdx-json
+          output: api.spdx.json
+          cache: 'false'
+      - name: Scan published web image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.vars.outputs.web_image }}@${{ steps.web.outputs.digest }}
+          scanners: vuln,secret,misconfig
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: '1'
+          cache: 'false'
+      - name: Generate web SPDX SBOM
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ${{ steps.vars.outputs.web_image }}@${{ steps.web.outputs.digest }}
+          format: spdx-json
+          output: web.spdx.json
+          cache: 'false'
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Sign images and attach signed SBOM attestations
+        env:
+          API_REF: ${{ steps.vars.outputs.api_image }}@${{ steps.api.outputs.digest }}
+          WEB_REF: ${{ steps.vars.outputs.web_image }}@${{ steps.web.outputs.digest }}
+        run: |
+          cosign sign --yes "$API_REF" "$WEB_REF"
+          cosign attest --yes --type spdxjson --predicate api.spdx.json "$API_REF"
+          cosign attest --yes --type spdxjson --predicate web.spdx.json "$WEB_REF"
+      - name: Verify signatures and SBOM attestations before promotion
+        env:
+          API_REF: ${{ steps.vars.outputs.api_image }}@${{ steps.api.outputs.digest }}
+          WEB_REF: ${{ steps.vars.outputs.web_image }}@${{ steps.web.outputs.digest }}
+        run: |
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@refs/heads/main"
+          issuer="https://token.actions.githubusercontent.com"
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$API_REF"
+          cosign verify --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$WEB_REF"
+          cosign verify-attestation --type spdxjson --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$API_REF"
+          cosign verify-attestation --type spdxjson --certificate-identity "$identity" --certificate-oidc-issuer "$issuer" "$WEB_REF"
+      - name: Build release CLI and manifest
+        env:
+          RELEASE_VERSION: ${{ steps.vars.outputs.release_version }}
+          API_REF: ${{ steps.vars.outputs.api_image }}@${{ steps.api.outputs.digest }}
+          WEB_REF: ${{ steps.vars.outputs.web_image }}@${{ steps.web.outputs.digest }}
+          EMERGENCY: ${{ inputs.emergency || false }}
+        run: |
+          mkdir release
+          build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          cd backend
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -ldflags="-s -w -X main.version=${RELEASE_VERSION} -X main.commit=${RELEASE_SHA} -X main.buildDate=${build_date}" -o ../release/hotelmate-linux-amd64 ./cmd/hotelmate
+          migrations="$(go run ./cmd/hotelmate --json version | jq -c '.data.migrations')"
+          cd ..
+          sha256sum release/hotelmate-linux-amd64 > release/hotelmate-linux-amd64.sha256
+          cp api.spdx.json web.spdx.json release/
+          jq -n \
+            --arg schemaVersion 'hotelmate.release/v1' \
+            --arg releaseVersion "$RELEASE_VERSION" \
+            --arg commit "$RELEASE_SHA" \
+            --arg createdAt "$build_date" \
+            --arg apiImage "$API_REF" \
+            --arg webImage "$WEB_REF" \
+            --argjson migrations "$migrations" \
+            --arg emergency "$EMERGENCY" \
+            '{schemaVersion:$schemaVersion,releaseVersion:$releaseVersion,commit:$commit,createdAt:$createdAt,apiImage:$apiImage,webImage:$webImage,migrations:$migrations,sboms:{api:"api.spdx.json",web:"web.spdx.json"},evidence:{ciRun:env.GITHUB_RUN_ID,emergency:($emergency=="true")}}' \
+            > release/release.json
+      - name: Upload immutable release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hotelmate-release-${{ steps.vars.outputs.release_version }}
+          path: release
+          if-no-files-found: error
+          retention-days: 90
+
+  staging:
+    needs: release
+    runs-on: ubuntu-latest
+    environment: staging
+    concurrency:
+      group: hotelmate-staging
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: hotelmate-release-${{ needs.release.outputs.release_version }}
+          path: release
+      - name: Configure pinned SSH host identity
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Deploy exact tested digests to staging
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          CONFIG_FILE: ${{ vars.CONFIG_FILE }}
+        run: |
+          # Expansion is intentionally local from protected environment variables.
+          # shellcheck disable=SC2029
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"
+          scp release/release.json release/hotelmate-linux-amd64 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
+          # Expansion is intentionally local from protected environment variables.
+          # shellcheck disable=SC2029
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && chmod 700 incoming/hotelmate-linux-amd64 && incoming/hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+      - name: Run staging acceptance and authenticated smoke
+        env:
+          ACCEPTANCE_ONBOARDING_TOKEN: ${{ secrets.ACCEPTANCE_ONBOARDING_TOKEN }}
+          SMOKE_HOTEL_SLUG: ${{ secrets.SMOKE_HOTEL_SLUG }}
+          SMOKE_STAFF_EMAIL: ${{ secrets.SMOKE_STAFF_EMAIL }}
+          SMOKE_STAFF_PASSWORD: ${{ secrets.SMOKE_STAFF_PASSWORD }}
+          STAGING_URL: ${{ vars.BASE_URL }}
+        run: |
+          chmod 700 release/hotelmate-linux-amd64
+          release/hotelmate-linux-amd64 --base-url "$STAGING_URL" acceptance --json
+          release/hotelmate-linux-amd64 --base-url "$STAGING_URL" smoke --json
+
+  production:
+    needs: [release, staging]
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: hotelmate-production
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: hotelmate-release-${{ needs.release.outputs.release_version }}
+          path: release
+      - name: Configure pinned SSH host identity
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+      - name: Promote the staging-tested digest to production
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
+          CONFIG_FILE: ${{ vars.CONFIG_FILE }}
+        run: |
+          # Expansion is intentionally local from protected environment variables.
+          # shellcheck disable=SC2029
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"
+          scp release/release.json release/hotelmate-linux-amd64 "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/incoming/"
+          # Expansion is intentionally local from protected environment variables.
+          # shellcheck disable=SC2029
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH' && chmod 700 incoming/hotelmate-linux-amd64 && incoming/hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+      - name: Verify production public and authenticated paths
+        env:
+          SMOKE_HOTEL_SLUG: ${{ secrets.SMOKE_HOTEL_SLUG }}
+          SMOKE_STAFF_EMAIL: ${{ secrets.SMOKE_STAFF_EMAIL }}
+          SMOKE_STAFF_PASSWORD: ${{ secrets.SMOKE_STAFF_PASSWORD }}
+          PRODUCTION_URL: ${{ vars.BASE_URL }}
+        run: |
+          chmod 700 release/hotelmate-linux-amd64
+          release/hotelmate-linux-amd64 --base-url "$PRODUCTION_URL" smoke --json

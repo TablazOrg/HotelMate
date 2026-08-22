@@ -1,0 +1,18 @@
+[Unit]
+Description=HotelMate verified encrypted recovery-set backup
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=hotelmate
+Group=hotelmate
+WorkingDirectory=/srv/hotelmate
+ExecStart=/usr/local/bin/hotelmate --config /etc/hotelmate/production.env backup create --yes
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/hotelmate-private /var/lib/node_exporter/textfile_collector
+UMask=0077
+TimeoutStartSec=2h

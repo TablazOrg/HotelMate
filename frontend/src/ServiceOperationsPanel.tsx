@@ -108,25 +108,32 @@ export function AdminRequestOverview({ token }: { token: string }) {
   const [busy, setBusy] = useState('')
   const [error, setError] = useState('')
 
+  const refreshReport = useCallback(async () => {
+    const reporting = await api<{ report: OperationalReport }>('/api/v1/staff/reports/operations', {}, token)
+    setReport(reporting.report)
+  }, [token])
+
   const load = useCallback(async () => {
     try {
-      const [queue, reporting] = await Promise.all([
+      const [queue] = await Promise.all([
         api<{ requests: ServiceRequest[] }>('/api/v1/staff/requests', {}, token),
-        api<{ report: OperationalReport }>('/api/v1/staff/reports/operations', {}, token),
+        refreshReport(),
       ])
       setRequests(queue.requests)
-      setReport(reporting.report)
     } catch (requestError) {
       setError(messageFrom(requestError))
     } finally {
       setLoading(false)
     }
-  }, [token])
+  }, [refreshReport, token])
 
   useEffect(() => { void load() }, [load])
   useEffect(() => subscribeRealtime(token, (event) => {
-    if (event.payload.request) setRequests((items) => mergeRequest(items, event.payload.request!))
-  }, setConnected), [token])
+    if (event.payload.request) {
+      setRequests((items) => mergeRequest(items, event.payload.request!))
+      void refreshReport().catch((requestError) => setError(messageFrom(requestError)))
+    }
+  }, setConnected), [refreshReport, token])
 
   async function advance(request: ServiceRequest) {
     const status: ServiceRequestStatus = request.status === 'new' ? 'in_progress' : 'completed'
@@ -136,6 +143,7 @@ export function AdminRequestOverview({ token }: { token: string }) {
         method: 'POST', body: JSON.stringify({ status, note: '' }),
       }, token)
       setRequests((items) => mergeRequest(items, response.request))
+      await refreshReport()
     } catch (requestError) { setError(messageFrom(requestError)) }
     finally { setBusy('') }
   }

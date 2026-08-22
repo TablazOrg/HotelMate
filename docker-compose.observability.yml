@@ -1,0 +1,112 @@
+services:
+  prometheus:
+    image: prom/prometheus:v3.5.0
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=${METRICS_RETENTION:-30d}
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./ops/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./ops/observability/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - alertmanager
+      - node-exporter
+      - postgres-exporter
+      - cadvisor
+      - loki
+
+  alertmanager:
+    image: prom/alertmanager:v0.28.1
+    restart: unless-stopped
+    command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
+    ports:
+      - "127.0.0.1:9093:9093"
+    volumes:
+      - ./ops/observability/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+
+  grafana:
+    image: grafana/grafana:12.1.0
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
+    ports:
+      - "127.0.0.1:3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./ops/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+      - loki
+
+  loki:
+    image: grafana/loki:3.5.3
+    restart: unless-stopped
+    command: [-config.file=/etc/loki/loki.yml]
+    volumes:
+      - ./ops/observability/loki.yml:/etc/loki/loki.yml:ro
+      - loki-data:/loki
+
+  alloy:
+    image: grafana/alloy:v1.10.0
+    restart: unless-stopped
+    command: [run, /etc/alloy/config.alloy]
+    environment:
+      HOTELMATE_ENVIRONMENT: ${APP_ENV:?APP_ENV is required}
+    volumes:
+      - ./ops/observability/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    depends_on:
+      - loki
+
+  node-exporter:
+    image: prom/node-exporter:v1.9.1
+    restart: unless-stopped
+    command:
+      - --path.rootfs=/host
+      - --collector.textfile.directory=/textfile
+    volumes:
+      - /:/host:ro,rslave
+      - ${HOTELMATE_TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}:/textfile:ro
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.52.1
+    restart: unless-stopped
+    privileged: true
+    devices:
+      - /dev/kmsg:/dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.17.1
+    restart: unless-stopped
+    environment:
+      DATA_SOURCE_NAME: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  blackbox-exporter:
+    image: prom/blackbox-exporter:v0.27.0
+    restart: unless-stopped
+    command: [--config.file=/etc/blackbox/blackbox.yml]
+    volumes:
+      - ./ops/observability/blackbox.yml:/etc/blackbox/blackbox.yml:ro
+
+volumes:
+  prometheus-data:
+  alertmanager-data:
+  grafana-data:
+  loki-data:

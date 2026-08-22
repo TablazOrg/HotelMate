@@ -1,4 +1,6 @@
-.PHONY: dev up down logs seed-demo migrate purge-documents purge-messages backup restore smoke backend-test backend-fmt frontend-install frontend-build
+.PHONY: dev up down logs seed-demo doctor config-validate migrate migrate-status purge-documents purge-messages backup backup-list backup-verify restore smoke acceptance deploy-preflight deploy-status deploy-apply deploy-rollback backend-test backend-fmt frontend-install frontend-build
+
+HOTELMATE = cd backend && go run ./cmd/hotelmate --
 
 dev:
 	@echo "Run 'make up' for the full stack, or start the API and frontend separately."
@@ -16,22 +18,52 @@ seed-demo:
 	docker compose run --rm --entrypoint /app/seed-demo api
 
 purge-documents:
-	docker compose run --rm --entrypoint /app/purge-documents api
+	$(HOTELMATE) retention purge-documents --yes
 
 purge-messages:
-	docker compose run --rm --entrypoint /app/purge-messages api
+	$(HOTELMATE) retention purge-messages --yes
 
 migrate:
-	docker compose run --rm --entrypoint /app/migrate api
+	$(HOTELMATE) migrate up --yes
+
+migrate-status:
+	$(HOTELMATE) migrate status
+
+doctor:
+	$(HOTELMATE) doctor
+
+config-validate:
+	$(HOTELMATE) config validate
 
 backup:
-	./scripts/backup.sh "$(BACKUP_DIR)"
+	$(HOTELMATE) --backup-dir "$(BACKUP_DIR)" backup create --yes
+
+backup-list:
+	$(HOTELMATE) --backup-dir "$(BACKUP_DIR)" backup list
+
+backup-verify:
+	$(HOTELMATE) --manifest "$(BACKUP_FILE)" backup verify
 
 restore:
-	./scripts/restore.sh "$(BACKUP_FILE)" "$(CONFIRM)"
+	$(HOTELMATE) --manifest "$(BACKUP_FILE)" backup restore $(CONFIRM)
 
 smoke:
-	./scripts/smoke.sh "$(BASE_URL)"
+	$(HOTELMATE) --base-url "$(BASE_URL)" smoke
+
+acceptance:
+	$(HOTELMATE) --base-url "$(BASE_URL)" acceptance
+
+deploy-preflight:
+	$(HOTELMATE) --config "$(CONFIG_FILE)" --release-file "$(RELEASE_FILE)" deploy preflight
+
+deploy-status:
+	$(HOTELMATE) --config "$(CONFIG_FILE)" deploy status
+
+deploy-apply:
+	$(HOTELMATE) --config "$(CONFIG_FILE)" --release-file "$(RELEASE_FILE)" deploy apply --yes
+
+deploy-rollback:
+	$(HOTELMATE) --config "$(CONFIG_FILE)" --release-file "$(RELEASE_FILE)" deploy rollback --yes
 
 backend-test:
 	cd backend && go test ./...

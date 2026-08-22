@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "hotelmate.release/v1",
+  "releaseVersion": "0.7.0-local",
+  "commit": "working-tree",
+  "createdAt": "2026-08-22T19:40:00Z",
+  "apiImage": "hotelmate-api:dev",
+  "webImage": "hotelmate-web:dev",
+  "migrations": [
+    "2026082101_identity_tenancy",
+    "2026082102_reservation_lifecycle",
+    "2026082103_service_operations",
+    "2026082204_revenue_content",
+    "2026082205_conversations_knowledge",
+    "2026082206_reporting_hardening"
+  ]
+}
