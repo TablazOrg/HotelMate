@@ -157,7 +157,7 @@ func TestPrometheusMetricsExposeBoundedRoutePatterns(t *testing.T) {
 		t.Fatalf("metrics status = %d", response.Code)
 	}
 	body := response.Body.String()
-	if !strings.Contains(body, "hotelmate_build_info{version=\"test\"} 1") || !strings.Contains(body, "pattern=\"GET /healthz\"") {
+	if !strings.Contains(body, "hotelmate_build_info{version=\"test\",commit=\"\",image=\"\"} 1") || !strings.Contains(body, "pattern=\"GET /healthz\"") {
 		t.Fatalf("unexpected metrics body: %s", body)
 	}
 }

@@ -89,7 +89,7 @@ func NewHandler(deps Dependencies) http.Handler {
 		deps.ChatConfidence = 0.5
 	}
 	if deps.Metrics == nil {
-		deps.Metrics = observability.New(deps.Version)
+		deps.Metrics = observability.New(deps.Version, "", "")
 	}
 	s := &Server{
 		db:                deps.DB,
