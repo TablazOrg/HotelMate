@@ -28,6 +28,21 @@ func TestLocalStorageSaveOpenDelete(t *testing.T) {
 	if filepath.IsAbs(saved.StorageKey) || filepath.Base(saved.Name) != saved.Name {
 		t.Fatalf("unsafe saved metadata: %+v", saved)
 	}
+	storedPath := filepath.Join(storage.root, filepath.FromSlash(saved.StorageKey))
+	storedInfo, err := os.Stat(storedPath)
+	if err != nil {
+		t.Fatalf("stat stored document: %v", err)
+	}
+	if storedInfo.Mode().Perm() != sharedPrivateFileMode {
+		t.Fatalf("stored document mode = %04o, want %04o", storedInfo.Mode().Perm(), sharedPrivateFileMode)
+	}
+	directoryInfo, err := os.Stat(filepath.Dir(storedPath))
+	if err != nil {
+		t.Fatalf("stat document directory: %v", err)
+	}
+	if directoryInfo.Mode().Perm() != sharedPrivateDirectoryMode {
+		t.Fatalf("document directory mode = %04o, want %04o", directoryInfo.Mode().Perm(), sharedPrivateDirectoryMode)
+	}
 	file, err := storage.Open(context.Background(), saved.StorageKey)
 	if err != nil {
 		t.Fatalf("open: %v", err)

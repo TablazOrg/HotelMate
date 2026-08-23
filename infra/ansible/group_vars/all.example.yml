@@ -1,12 +1,16 @@
 hotelmate_deploy_user: hotelmate
+hotelmate_api_uid: 100
 hotelmate_deploy_root: /srv/hotelmate
 hotelmate_private_root: /srv/hotelmate-private
 hotelmate_ssh_public_keys:
   - ssh-ed25519 REPLACE_WITH_APPROVED_OPERATOR_KEY
 hotelmate_ssh_port: 22
+hotelmate_swap_size_mb: 2048
 hotelmate_metrics_retention: 30d
 hotelmate_alert_receiver_configured: false
 hotelmate_recovery_drill_enabled: false
+hotelmate_manage_production_env: true
+hotelmate_scheduled_operations_enabled: true
 hotelmate_cli_sha256: REPLACE_WITH_RELEASE_CLI_SHA256
 hotelmate_cosign_sha256: REPLACE_WITH_APPROVED_COSIGN_SHA256
 hotelmate_docker_daemon_config:
@@ -25,6 +29,8 @@ hotelmate_production_env: |
   HOTELMATE_BACKUP_DIR={{ hotelmate_private_root }}/backups
   HOTELMATE_EVIDENCE_DIR={{ hotelmate_private_root }}/evidence
   HOTELMATE_HOST_UPLOADS_DIR={{ hotelmate_private_root }}/uploads
+  HOTELMATE_API_UID={{ hotelmate_api_uid }}
+  HOTELMATE_OPERATOR_GID={{ hotelmate_operator_gid }}
   HOTELMATE_TEXTFILE_DIR=/var/lib/node_exporter/textfile_collector
   DATABASE_URL={{ vault_hotelmate_database_url }}
   POSTGRES_DB={{ vault_postgres_db }}

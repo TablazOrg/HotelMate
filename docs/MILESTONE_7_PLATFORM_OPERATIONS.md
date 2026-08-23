@@ -6,7 +6,7 @@ M7 turns the current single-host release baseline into a reproducible operating 
 
 The target remains intentionally provider-neutral until the discovery decisions below are approved. Kubernetes and multi-region failover are not default requirements; they should be introduced only when availability, traffic, or organizational constraints justify their cost.
 
-## Implementation status — provider-neutral platform delivered, external rollout pending
+## Implementation status — external staging deployed, production gates pending
 
 As of 2026-08-23, the repository contains the M7 provider-neutral foundation:
 
@@ -16,7 +16,15 @@ As of 2026-08-23, the repository contains the M7 provider-neutral foundation:
 - A provider-neutral Ubuntu/Ansible baseline for non-root deployment, key-only SSH, firewalling, unattended security updates, Docker log rotation, certificate renewal, protected directories, timers, and checksummed CLI/cosign installation.
 - Prometheus application/release metrics, `pg_stat_statements`, PostgreSQL/host/container/external probes, Loki/Alloy request-ID correlation, a provisioned Grafana dashboard, and alerts for availability, errors, latency, authentication, WebSockets, operations, TLS, capacity, database behavior, backups, purges, and restore-drill age.
 
-M7 remains **in progress**, not complete. [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved; no external provider, domain, deployment-capable staging/production hosts, SSH target credentials, approved production protection, restic destination, secrets manager, or paging receiver were supplied. Consequently the repository cannot truthfully produce public DNS/TLS, staging/production availability, protected production promotion, encrypted off-host durability, provider rebuild/drift, or routed-alert evidence.
+M7 remains **in progress**, not complete. An operator-supplied Ubuntu VPS has now been hardened and validated as staging, but [ADR-0007](adr/0007-platform-operations-decisions.md) is unapproved and the host came without a domain/DNS owner, trusted TLS certificate, registry authorization, approved production protection, off-host restic destination, secrets manager, recovery objectives, or paging receiver. It cannot truthfully be treated as production or prove protected production promotion, encrypted off-host durability, approved recovery objectives, or routed-alert evidence.
+
+### External staging verification evidence
+
+The sanitized record is [M7 external staging validation — 2026-08-23](evidence/M7_STAGING_VALIDATION_20260823.md). The supplied host was bootstrapped through Ansible, rebooted, and converged to a zero-change repeat run. Key-only non-root SSH, default-deny UFW, private PostgreSQL, bounded Docker logs, unattended updates, fail2ban, time synchronization, a 2 GiB swap file, and checksum-verified CLI/Cosign installation were verified.
+
+All seven migrations, public/authenticated smoke, and the native stateful acceptance suite passed remotely. A staging recovery set containing PostgreSQL plus the private-upload scope was created and independently verified with matching hashes and 162 PostgreSQL catalog entries. The exercise also exposed and fixed the API/backup-operator upload permission boundary; the shared group contract is now enforced in the application, Compose, restore path, tests, and Ansible.
+
+This staging deployment intentionally uses HTTP, controller-loaded immutable Linux/amd64 images, and a local-only recovery set. Private GHCR access was unavailable, so registry/signature gates were not bypassed; scheduled operations and the resource-heavy observability profile remain disabled until off-host storage and an approved alert receiver exist.
 
 ### Local verification evidence
 
@@ -36,12 +44,12 @@ These values prove the local command paths, validation, recovery selection, and 
 
 | M7 capability | Repository evidence | Current status |
 | --- | --- | --- |
-| Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script compatibility aliases, unit/failure-path tests | Implemented and locally proven |
+| Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script compatibility aliases, unit/failure-path tests | Implemented; local and external staging smoke/acceptance proven |
 | CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented and remotely proven by CI #21/release #5; branch and production-environment enforcement pending |
-| Delivery and rollback | Digest policy, preflight, owner locks, migrations, checkpoint, activation, authenticated smoke, automatic/application rollback, timestamped evidence | Locally proven; staging/production promotion pending |
-| Backup and restore | Strict coordinated manifests, checksums, PostgreSQL catalog checks, upload path safety, restic encryption/retention, metrics/timers | Local recovery set proven; approved off-host repository and immutability pending |
+| Delivery and rollback | Digest policy, preflight, owner locks, migrations, checkpoint, activation, authenticated smoke, automatic/application rollback, timestamped evidence | External manual staging deployment/acceptance proven; signed automated promotion and production rollback pending |
+| Backup and restore | Strict coordinated manifests, checksums, PostgreSQL catalog checks, upload path safety, restic encryption/retention, metrics/timers | External staging local recovery set verified; approved off-host repository, schedule, and immutability pending |
 | Recovery rehearsal | Isolated-target guard, point-in-time set selection, restore, migrations, smoke, native acceptance, RPO/RTO evidence, monthly timer | Local drill passed; scheduled provider-backed drill and approved objectives pending |
-| Host baseline | Versioned Ansible, firewall, key-only user, updates, log rotation, certbot timer, protected directories, checksum verification | Implemented and syntax-checked; clean provider-host rebuild/drift evidence pending |
+| Host baseline | Versioned Ansible, firewall, key-only user, updates, swap, log rotation, certbot timer, protected directories, checksum verification | Applied to an external Ubuntu host, rebooted, and converged with `changed=0`; replacement-host rebuild still pending |
 | Observability | Private Prometheus/Grafana/Alertmanager/Loki/Alloy profile, release/request-ID/database/job signals, dashboard, alert rules | Implemented and statically validated; real retention, paging route, and alert exercises pending |
 | Owner governance | ADR, deployment/recovery/incident runbooks, explicit external acceptance gates | Documented; owner decisions, roles, approvals, access review, and exercises pending |
 

@@ -48,6 +48,11 @@ type LocalStorage struct {
 	maxBytes int64
 }
 
+const (
+	sharedPrivateDirectoryMode os.FileMode = 0o770
+	sharedPrivateFileMode      os.FileMode = 0o660
+)
+
 func NewLocalStorage(root string, maxBytes int64) (*LocalStorage, error) {
 	absolute, err := filepath.Abs(root)
 	if err != nil {
@@ -56,7 +61,7 @@ func NewLocalStorage(root string, maxBytes int64) (*LocalStorage, error) {
 	if maxBytes < 1024 {
 		return nil, errors.New("document size limit is too small")
 	}
-	if err := os.MkdirAll(absolute, 0o700); err != nil {
+	if err := os.MkdirAll(absolute, sharedPrivateDirectoryMode); err != nil {
 		return nil, fmt.Errorf("create uploads directory: %w", err)
 	}
 	return &LocalStorage{root: absolute, maxBytes: maxBytes}, nil
@@ -86,11 +91,19 @@ func (s *LocalStorage) Save(ctx context.Context, hotelID uuid.UUID, source io.Re
 	if err != nil {
 		return SavedDocument{}, err
 	}
-	if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+	directory := filepath.Dir(target)
+	if err := os.MkdirAll(directory, sharedPrivateDirectoryMode); err != nil {
 		return SavedDocument{}, fmt.Errorf("create document directory: %w", err)
 	}
-	if err := os.WriteFile(target, data, 0o600); err != nil {
+	if err := os.Chmod(directory, sharedPrivateDirectoryMode); err != nil {
+		return SavedDocument{}, fmt.Errorf("share document directory: %w", err)
+	}
+	if err := os.WriteFile(target, data, sharedPrivateFileMode); err != nil {
 		return SavedDocument{}, fmt.Errorf("write document: %w", err)
+	}
+	if err := os.Chmod(target, sharedPrivateFileMode); err != nil {
+		_ = os.Remove(target)
+		return SavedDocument{}, fmt.Errorf("share document: %w", err)
 	}
 	digest := sha256.Sum256(data)
 	return SavedDocument{

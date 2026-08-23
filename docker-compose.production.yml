@@ -19,7 +19,8 @@ services:
 
   api:
     image: ${HOTELMATE_API_IMAGE:?HOTELMATE_API_IMAGE digest is required}
-    pull_policy: always
+    pull_policy: ${HOTELMATE_PULL_POLICY:-always}
+    user: "${HOTELMATE_API_UID:-100}:${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     restart: unless-stopped
     environment:
       APP_ENV: ${APP_ENV:?APP_ENV is required}
@@ -54,7 +55,7 @@ services:
 
   web:
     image: ${HOTELMATE_WEB_IMAGE:?HOTELMATE_WEB_IMAGE digest is required}
-    pull_policy: always
+    pull_policy: ${HOTELMATE_PULL_POLICY:-always}
     restart: unless-stopped
     environment:
       DOMAIN: ${DOMAIN:?DOMAIN is required}

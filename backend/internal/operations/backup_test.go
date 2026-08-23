@@ -85,6 +85,55 @@ func TestExtractUploadsArchiveRejectsTraversal(t *testing.T) {
 	}
 }
 
+func TestExtractUploadsArchivePreservesOperatorModes(t *testing.T) {
+	directory := t.TempDir()
+	archivePath := filepath.Join(directory, "uploads.tar.gz")
+	file, err := os.Create(archivePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gzipWriter := gzip.NewWriter(file)
+	tarWriter := tar.NewWriter(gzipWriter)
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "check-in", Mode: 0o700, Typeflag: tar.TypeDir}); err != nil {
+		t.Fatal(err)
+	}
+	payload := []byte("private document")
+	if err := tarWriter.WriteHeader(&tar.Header{Name: "check-in/document.pdf", Mode: 0o600, Size: int64(len(payload)), Typeflag: tar.TypeReg}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tarWriter.Write(payload); err != nil {
+		t.Fatal(err)
+	}
+	if err := tarWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gzipWriter.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	destination := filepath.Join(directory, "restore")
+	if err := extractUploadsArchive(archivePath, destination); err != nil {
+		t.Fatal(err)
+	}
+	directoryInfo, err := os.Stat(filepath.Join(destination, "check-in"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if directoryInfo.Mode().Perm() != sharedUploadDirectoryMode {
+		t.Fatalf("restored directory mode = %04o, want %04o", directoryInfo.Mode().Perm(), sharedUploadDirectoryMode)
+	}
+	fileInfo, err := os.Stat(filepath.Join(destination, "check-in", "document.pdf"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fileInfo.Mode().Perm() != sharedUploadFileMode {
+		t.Fatalf("restored file mode = %04o, want %04o", fileInfo.Mode().Perm(), sharedUploadFileMode)
+	}
+}
+
 func TestPostgresEnvironmentKeepsPasswordOutOfArguments(t *testing.T) {
 	environment, err := postgresEnvironment("postgres://operator:s3cret@db.internal:55432/hotelmate?sslmode=require")
 	if err != nil {

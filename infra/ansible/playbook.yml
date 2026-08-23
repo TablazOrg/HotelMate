@@ -49,6 +49,13 @@
         fail_msg: Cosign does not match the approved upstream checksum.
 
   tasks:
+    - name: Keep the static hostname resolvable for sudo and local services
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1\s'
+        line: "127.0.1.1 {{ ansible_facts['hostname'] }}"
+        state: present
+
     - name: Install host security and operations packages
       ansible.builtin.apt:
         name:
@@ -56,6 +63,7 @@
           - curl
           - certbot
           - docker.io
+          - docker-buildx
           - docker-compose-v2
           - fail2ban
           - postgresql-client-16
@@ -65,10 +73,72 @@
         state: present
         update_cache: true
 
+    - name: Inspect the managed swap file
+      ansible.builtin.stat:
+        path: /swapfile
+      register: hotelmate_swapfile
+      when: hotelmate_swap_size_mb | default(0) | int > 0
+
+    - name: Allocate swap for constrained single-host deployments
+      ansible.builtin.command:
+        cmd: "fallocate -l {{ hotelmate_swap_size_mb }}M /swapfile"
+        creates: /swapfile
+      when: hotelmate_swap_size_mb | default(0) | int > 0
+
+    - name: Protect the managed swap file
+      ansible.builtin.file:
+        path: /swapfile
+        owner: root
+        group: root
+        mode: "0600"
+      when: hotelmate_swap_size_mb | default(0) | int > 0
+
+    - name: Format a newly allocated swap file
+      ansible.builtin.command: mkswap /swapfile
+      when:
+        - hotelmate_swap_size_mb | default(0) | int > 0
+        - not hotelmate_swapfile.stat.exists
+
+    - name: Persist the managed swap file
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: '^/swapfile\s'
+        line: /swapfile none swap sw 0 0
+        state: present
+      when: hotelmate_swap_size_mb | default(0) | int > 0
+
+    - name: Inspect active swap devices
+      ansible.builtin.command: swapon --show=NAME --noheadings --raw
+      changed_when: false
+      register: hotelmate_active_swap
+      when: hotelmate_swap_size_mb | default(0) | int > 0
+
+    - name: Activate the managed swap file
+      ansible.builtin.command: swapon /swapfile
+      when:
+        - hotelmate_swap_size_mb | default(0) | int > 0
+        - "'/swapfile' not in hotelmate_active_swap.stdout_lines"
+
+    - name: Create the deployment operator group
+      ansible.builtin.group:
+        name: "{{ hotelmate_deploy_user }}"
+        gid: "{{ hotelmate_deploy_gid | default(omit) }}"
+        state: present
+
+    - name: Resolve the deployment operator group
+      ansible.builtin.getent:
+        database: group
+        key: "{{ hotelmate_deploy_user }}"
+
+    - name: Record the deployment operator group ID
+      ansible.builtin.set_fact:
+        hotelmate_operator_gid: "{{ ansible_facts.getent_group[hotelmate_deploy_user][1] }}"
+
     - name: Create the non-root deployment user
       ansible.builtin.user:
         name: "{{ hotelmate_deploy_user }}"
-        groups: docker
+        group: "{{ hotelmate_deploy_user }}"
+        groups: docker,sudo
         append: true
         shell: /bin/bash
         create_home: true
@@ -80,6 +150,14 @@
         state: present
         exclusive: false
       loop: "{{ hotelmate_ssh_public_keys }}"
+
+    - name: Preserve key-only host automation after disabling root SSH
+      community.general.sudoers:
+        name: hotelmate-automation
+        user: "{{ hotelmate_deploy_user }}"
+        commands: ALL
+        nopassword: true
+        state: present
 
     - name: Disable SSH root and password login
       ansible.builtin.copy:
@@ -121,14 +199,54 @@
         mode: "{{ item.mode }}"
       loop:
         - { path: "{{ hotelmate_deploy_root }}", mode: "0750" }
+        - { path: "{{ hotelmate_deploy_root }}/ops/observability", mode: "0750" }
         - { path: "{{ hotelmate_private_root }}", mode: "0700" }
         - { path: "{{ hotelmate_private_root }}/backups", mode: "0700" }
         - { path: "{{ hotelmate_private_root }}/evidence", mode: "0700" }
-        - { path: "{{ hotelmate_private_root }}/uploads", mode: "0700" }
         - { path: /etc/hotelmate, mode: "0700" }
         - { path: /var/lib/node_exporter/textfile_collector, mode: "0750" }
         - { path: /srv/hotelmate-drill, mode: "0700" }
         - { path: /srv/hotelmate-drill/uploads, mode: "0700" }
+
+    - name: Share private uploads between the unprivileged API and backup operator
+      ansible.builtin.file:
+        path: "{{ hotelmate_private_root }}/uploads"
+        state: directory
+        owner: "{{ hotelmate_api_uid }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "2770"
+
+    - name: Find existing private upload directories
+      ansible.builtin.find:
+        paths: "{{ hotelmate_private_root }}/uploads"
+        file_type: directory
+        recurse: true
+      register: hotelmate_upload_directories
+
+    - name: Preserve operator access to existing private upload directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0770"
+      loop: "{{ hotelmate_upload_directories.files }}"
+      loop_control:
+        label: "{{ item.path }}"
+
+    - name: Find existing private upload files
+      ansible.builtin.find:
+        paths: "{{ hotelmate_private_root }}/uploads"
+        file_type: file
+        recurse: true
+      register: hotelmate_upload_files
+
+    - name: Preserve operator access to existing private upload files
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0660"
+      loop: "{{ hotelmate_upload_files.files }}"
+      loop_control:
+        label: "{{ item.path }}"
 
     - name: Install protected HotelMate environment
       ansible.builtin.copy:
@@ -137,6 +255,7 @@
         group: "{{ hotelmate_deploy_user }}"
         mode: "0600"
         content: "{{ hotelmate_production_env }}"
+      when: hotelmate_manage_production_env | default(true) | bool
       no_log: true
 
     - name: Configure bounded Docker JSON logs
@@ -171,18 +290,29 @@
 
     - name: Install versioned observability configuration
       ansible.builtin.copy:
-        src: "{{ hotelmate_source_root }}/ops/observability/"
-        dest: "{{ hotelmate_deploy_root }}/ops/observability/"
+        src: "{{ hotelmate_source_root }}/ops/observability/{{ item }}"
+        dest: "{{ hotelmate_deploy_root }}/ops/observability/{{ item }}"
         owner: "{{ hotelmate_deploy_user }}"
         group: "{{ hotelmate_deploy_user }}"
         directory_mode: "0750"
         mode: preserve
+      loop:
+        - alertmanager.yml
+        - alerts.yml
+        - blackbox.yml
+        - config.alloy
+        - grafana/
+        - loki.yml
 
-    - name: Set the approved external HTTPS probe target
-      ansible.builtin.replace:
-        path: "{{ hotelmate_deploy_root }}/ops/observability/prometheus.yml"
-        regexp: https://hotel\.example\.com
-        replace: "https://{{ hotelmate_domain }}"
+    - name: Render the approved external probe target
+      ansible.builtin.copy:
+        dest: "{{ hotelmate_deploy_root }}/ops/observability/prometheus.yml"
+        owner: "{{ hotelmate_deploy_user }}"
+        group: "{{ hotelmate_deploy_user }}"
+        mode: "0640"
+        content: >-
+          {{ lookup('ansible.builtin.file', hotelmate_source_root + '/ops/observability/prometheus.yml', rstrip=false)
+             | replace('https://hotel.example.com', hotelmate_external_probe_url | default('https://' + hotelmate_domain)) }}
 
     - name: Install the approved alert routing configuration
       ansible.builtin.copy:
@@ -238,6 +368,7 @@
         - hotelmate-backup.timer
         - hotelmate-purge-documents.timer
         - hotelmate-purge-messages.timer
+      when: hotelmate_scheduled_operations_enabled | default(true) | bool
 
     - name: Enable scheduled isolated recovery drills after owner approval
       ansible.builtin.systemd_service:

@@ -22,7 +22,11 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/database"
 )
 
-const recoverySchemaVersion = "hotelmate.recovery-set/v1"
+const (
+	recoverySchemaVersion     = "hotelmate.recovery-set/v1"
+	sharedUploadDirectoryMode = 0o770
+	sharedUploadFileMode      = 0o660
+)
 
 var recoverySetID = regexp.MustCompile(`^hotelmate-[0-9]{8}T[0-9]{6}Z$`)
 
@@ -592,7 +596,10 @@ func createUploadsArchive(root, destination string) (int, error) {
 }
 
 func extractUploadsArchive(archivePath, destination string) error {
-	if err := os.Mkdir(destination, 0o700); err != nil {
+	if err := os.Mkdir(destination, sharedUploadDirectoryMode); err != nil {
+		return err
+	}
+	if err := os.Chmod(destination, sharedUploadDirectoryMode); err != nil {
 		return err
 	}
 	failed := true
@@ -627,15 +634,26 @@ func extractUploadsArchive(archivePath, destination string) error {
 		target := filepath.Join(destination, clean)
 		switch header.Typeflag {
 		case tar.TypeDir:
-			if err := os.MkdirAll(target, 0o700); err != nil {
+			if err := os.MkdirAll(target, sharedUploadDirectoryMode); err != nil {
+				return err
+			}
+			if err := os.Chmod(target, sharedUploadDirectoryMode); err != nil {
 				return err
 			}
 		case tar.TypeReg:
-			if err := os.MkdirAll(filepath.Dir(target), 0o700); err != nil {
+			directory := filepath.Dir(target)
+			if err := os.MkdirAll(directory, sharedUploadDirectoryMode); err != nil {
 				return err
 			}
-			destinationFile, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
+			if err := os.Chmod(directory, sharedUploadDirectoryMode); err != nil {
+				return err
+			}
+			destinationFile, err := os.OpenFile(target, os.O_CREATE|os.O_EXCL|os.O_WRONLY, sharedUploadFileMode)
 			if err != nil {
+				return err
+			}
+			if err := destinationFile.Chmod(sharedUploadFileMode); err != nil {
+				_ = destinationFile.Close()
 				return err
 			}
 			_, copyErr := io.Copy(destinationFile, reader)

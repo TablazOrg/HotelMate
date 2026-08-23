@@ -118,6 +118,7 @@ jobs:
           ONBOARDING_TOKEN: ci-only-onboarding-token-long-enough
           ALLOWED_ORIGINS: https://hotel.example.com
           HOTELMATE_HOST_UPLOADS_DIR: /srv/hotelmate-private/uploads
+          HOTELMATE_OPERATOR_GID: 1001
           HOTELMATE_API_IMAGE: registry.example.com/hotelmate-api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
           HOTELMATE_WEB_IMAGE: registry.example.com/hotelmate-web@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
           GRAFANA_ADMIN_USER: admin

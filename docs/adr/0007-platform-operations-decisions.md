@@ -12,7 +12,7 @@ M7 requires external commercial, legal, recovery, access, and ownership choices 
 
 | Decision | Required owner value | Current repository behavior |
 | --- | --- | --- |
-| Provider, region, residency, budget, account owner | Pending | No provider resource is created; Ansible begins from an approved Ubuntu host |
+| Provider, region, residency, budget, account owner | Pending | An operator-supplied Ubuntu VPS is validated as staging only; provider/account/residency approval remains absent |
 | Staging/production domains, DNS, certificate owner, IPv6 | Pending | TLS Compose and external probe require supplied domains/certificates |
 | Availability, volume, maintenance, scaling trigger | Pending | Proposed SLO only; one API replica remains enforced by architecture |
 | RPO, RTO, retention, legal hold, document recovery | Pending | Daily logical recovery set and 14 daily/8 weekly restic proposal; not approved |
@@ -30,4 +30,4 @@ M7 requires external commercial, legal, recovery, access, and ownership choices 
 
 ## Consequences
 
-M7 implementation can be built, tested, deployed, rolled back, and restored locally now. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are evidence of the implementation rather than approved production objectives. A real staging/production deployment, successful encrypted off-host transfer, scheduled provider-backed drill against approved RPO/RTO, tested paging route, DNS/TLS renewal, and provider rebuild/drift evidence remain acceptance blockers until this ADR is approved and credentials/resources are available.
+M7 implementation can be built, tested, deployed, rolled back, and restored locally. The supplied VPS now also proves external Ansible convergence, reboot persistence, HTTP staging availability, authenticated acceptance, and coordinated on-host recovery-set verification. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are implementation evidence rather than approved production objectives. Signed registry-based staging/production promotion, successful encrypted off-host transfer, a scheduled provider-backed drill against approved RPO/RTO, tested paging, DNS/TLS renewal, and replacement-host rebuild evidence remain acceptance blockers until this ADR is approved and the required resources are available.
