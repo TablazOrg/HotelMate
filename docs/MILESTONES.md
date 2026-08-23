@@ -76,35 +76,40 @@ Delivered in the repository with the unified Go operations CLI and JSON/exit-cod
 
 Local deployment, authenticated smoke, full acceptance, a distinct-image rollback/redeploy, a coordinated PostgreSQL/private-upload recovery set, and an isolated drill have passed; the drill measured local RPO at 268 seconds and RTO at 4 seconds. CI #21 also passed all five gates, and release #5 published, scanned, SBOMed, signed, verified, and bundled both GHCR images before staging stopped at the SSH step because no external deployment target/credentials were supplied. The [sanitized evidence](evidence/M7_LOCAL_VALIDATION_20260823.md), discovery, work packages, dependencies, and acceptance gates are linked from [M7 platform operations and infrastructure](MILESTONE_7_PLATFORM_OPERATIONS.md). M7 remains in progress until [ADR-0007](adr/0007-platform-operations-decisions.md) is approved and public staging/production promotion, encrypted off-host durability, a scheduled provider-backed drill against approved objectives, DNS/TLS renewal, clean-host rebuild/drift, and routed alert exercises produce evidence.
 
-## M8 — Online check-in 2.0 and arrival readiness (planned)
+## M8 — Online check-in 2.0 and arrival readiness (prototype-defined; implementation planned)
 
-- Replace the single-document pre-arrival flow with a resumable, configurable check-in journey covering guest and companion details, arrival plans, per-guest documents, consent, versioned e-signature, custom questions, preferences, and reception review.
-- Add secure reservation links and QR entry, step-level progress and recovery, room-ready waiting state, exception handling, and an arrivals workspace that shows readiness instead of only document status.
-- Instrument completion, abandonment, review, and front-desk handling time while preserving tenant isolation, data minimization, document retention, and explicit approval gates.
+- Productize the supplied prototype's direct online-check-in entry and pre-arrival banner as a secure, resumable journey: reservation proof, contact and identity details, multi-image/PDF evidence, consent, versioned e-signature, companion and arrival details, correction, and staff review.
+- Preserve confirmed-reservation to pre-arrival-stay conversion and the prototype's pre-arrival entitlement rule: paid services and eligible offers may be available before arrival, while operational room services remain blocked until physical check-in.
+- Add signed invitation links and QR recovery, real three-step progress, autosave/resume, room-ready waiting, exception handling, feature-controlled rollout, and an arrivals workspace that shows readiness instead of only document status.
+- Instrument invitation, completion, abandonment, review, rework, approval, room-ready, and front-desk handling time while preserving tenant isolation, data minimization, document retention, and explicit approval gates.
 
-## M9 — Guest and staff experience redesign (planned)
+## M9 — Guest and staff experience redesign (prototype-defined; implementation planned)
 
-- Build a shared accessible design system and lifecycle-aware information architecture for pre-arrival, in-stay, checkout, reception, and department operations.
-- Improve service discovery and ordering with search, categories, details, quantities, modifiers, scheduling, confirmation, active/history tracking, and recovery from loading or network failures.
-- Add responsive tablet/desktop use, Persian/English/Arabic localization readiness, installable web-app behavior, performance budgets, usability testing, and WCAG 2.2 AA verification.
+- Turn the supplied prototype's four entry modes—public discovery, resident login, online check-in, and staff login—into one shared accessible design system with lifecycle-aware navigation and branded hotel theming.
+- Productize the public hotel guide, facilities, restaurants/menus, activities, promotions, resident home, quick actions, request tracking, and guest/reception conversation surfaces with search, detail, structured ordering, active/history separation, and complete loading/error/offline recovery.
+- Consolidate the prototype's dashboard, requests, conversations, notifications, reservations, stays, catalog, knowledge, promotions, analytics, users, and settings into role-specific staff workspaces with enforced server authorization, SLA triage, ownership, and responsive task views.
+- Add Persian/English/Arabic locale architecture, installable web-app behavior, performance budgets, usability testing, and WCAG 2.2 AA verification while using `IRANYekanXFaNum, sans-serif` consistently.
 
-## M10 — Lifecycle communication and personalization (planned)
+## M10 — Lifecycle communication and personalization (prototype-defined; implementation planned)
 
-- Add consent-aware, localized booking-to-post-stay communication through provider adapters for in-app, email, SMS, and WhatsApp, with templates, triggers, retries, fallbacks, opt-out handling, and delivery evidence.
-- Unify automated and human conversations in a role-aware inbox with ownership, SLA state, guest context, notification preferences, and escalation.
+- Productize the prototype's multilingual conversational journey: detect the guest's language independently from numeral format, extract multi-detail service requests, ask only for missing information, and transfer low-confidence or sensitive cases to reception with context.
+- Add consent-aware booking-to-post-stay communication through provider adapters for in-app, web push, email, SMS, and WhatsApp, including pre-arrival automation, request-status updates, one-hour service reminders, templates, retries, fallbacks, opt-out handling, and delivery evidence.
+- Unify automated and human conversations plus staff notifications in a role-aware inbox with ownership, SLA state, guest context, notification preferences, translation assistance, and escalation.
 - Personalize shortcuts, content, and offers by stay stage and approved guest preferences without exposing sensitive profile data to unrelated staff roles.
 
-## M11 — Commerce, payments, upsells, and digital checkout (planned)
+## M11 — Commerce, payments, upsells, and digital checkout (prototype-defined; implementation planned)
 
-- Add inventory- and schedule-aware upsells, order modifiers, baskets, room upgrades, early arrival, late checkout, and transparent taxes/fees.
-- Introduce a PCI-scoped payment-provider boundary for payment links, deposits/holds, idempotent webhooks, refunds, reconciliation, and folio-safe accounting without storing raw card data.
-- Deliver digital checkout with bill review, payment state, invoice/receipt, issue escalation, feedback, and service-recovery routing.
+- Productize the prototype's quote loop for paid services: guest or public lead expresses intent, the assistant gathers missing details, reception proposes cost/date/time, the guest adjusts and confirms or cancels, and staff fulfill against one auditable order state.
+- Preserve the prototype's commercial boundaries: public users provide minimal contact data only at paid conversion, pre-arrival guests can buy eligible services, complimentary operational requests never become paid leads, and hotel-controlled promotions use frequency caps and eligibility rules.
+- Add inventory- and schedule-aware upsells, modifiers, baskets, room upgrades, early arrival, late checkout, transparent taxes/fees, and trustworthy revenue/conversion measurement.
+- Introduce a PCI-scoped payment-provider boundary for payment links, deposits/holds, idempotent webhooks, refunds, reconciliation, and folio-safe accounting, then deliver feature-controlled contactless checkout with bill review, receipt, issue escalation, feedback, and recovery.
 
-## M12 — Hospitality integrations, automation, and journey intelligence (planned)
+## M12 — Hospitality integrations, automation, and journey intelligence (prototype-defined in part; implementation planned)
 
-- Build observable, replayable connector contracts for PMS/CRS, POS, CRM, channel managers, payment providers, and mobile-key systems.
-- Coordinate reservation, folio, room-readiness, task, order, and key-release events through idempotent sync and explicit human exception queues.
-- Add end-to-end journey funnels, service SLAs, revenue attribution, segmentation, cohort reporting, and controlled experimentation with privacy-safe analytics.
+- Replace the supplied prototype's local reservation/stay store and static analytics with authoritative, privacy-safe event data and observable, replayable connector contracts for PMS/CRS, POS, CRM, channel managers, payment providers, and mobile-key systems.
+- Coordinate reservation confirmation, pre-arrival stay creation, folio, room readiness, service tasks, paid-order quotes, notifications, checkout, and key release through idempotent sync and explicit human exception queues.
+- Turn the prototype's operations, AI, VAS, satisfaction, and review cards into reconciled journey funnels, SLA dashboards, revenue attribution, segmentation, cohort reporting, and controlled experimentation with governed metric definitions.
+- Manage hotel capabilities—online check-in, digital registration, pre-arrival ordering, promotions, reminders, contactless checkout, and automated messaging—as audited, dependency-aware rollout controls rather than independent UI switches.
 
 The benchmark, current-state UX audit, detailed scope, sequencing, product measures, and acceptance gates for M8–M12 are defined in [Product improvement milestones](PRODUCT_IMPROVEMENT_MILESTONES.md).
 
