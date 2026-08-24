@@ -227,7 +227,24 @@ func (s *GORMStore) CheckInStay(ctx context.Context, hotelID, stayID, roomID uui
 		if err := tx.Model(&stay).Updates(map[string]any{"status": models.StayActive, "check_in_at": at}).Error; err != nil {
 			return err
 		}
-		return tx.Model(&room).Update("status", models.RoomStatusOccupied).Error
+		if err := tx.Model(&room).Update("status", models.RoomStatusOccupied).Error; err != nil {
+			return err
+		}
+		var journey models.ArrivalJourney
+		err := tx.Where("hotel_id = ? AND stay_id = ?", hotelID, stayID).First(&journey).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		if err := tx.Model(&journey).Updates(map[string]any{"status": models.ArrivalCheckedIn, "checked_in_at": at}).Error; err != nil {
+			return err
+		}
+		return tx.Create(&models.ArrivalEvent{
+			BaseModel: models.BaseModel{CreatedAt: at}, HotelID: hotelID, JourneyID: journey.ID,
+			EventType: "physical_arrival", ActorType: "staff",
+		}).Error
 	})
 	if err != nil {
 		return models.Stay{}, err

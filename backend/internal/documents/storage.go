@@ -20,6 +20,7 @@ import (
 var (
 	ErrTooLarge        = errors.New("document exceeds size limit")
 	ErrUnsupportedType = errors.New("document type is not allowed")
+	ErrUnsafeContent   = errors.New("document contains active or unsafe content")
 	ErrInvalidKey      = errors.New("document storage key is invalid")
 )
 
@@ -86,6 +87,9 @@ func (s *LocalStorage) Save(ctx context.Context, hotelID uuid.UUID, source io.Re
 	if !ok {
 		return SavedDocument{}, ErrUnsupportedType
 	}
+	if unsafeDocumentContent(mediaType, data) {
+		return SavedDocument{}, ErrUnsafeContent
+	}
 	key := filepath.ToSlash(filepath.Join("check-in", hotelID.String(), uuid.NewString()+extension))
 	target, err := s.resolve(key)
 	if err != nil {
@@ -113,6 +117,26 @@ func (s *LocalStorage) Save(ctx context.Context, hotelID uuid.UUID, source io.Re
 		Size:       int64(len(data)),
 		SHA256:     hex.EncodeToString(digest[:]),
 	}, nil
+}
+
+// unsafeDocumentContent is a deterministic first-line content gate. A hosted
+// deployment may add a malware scanner before this storage adapter, but active
+// PDF constructs and the standard antivirus test signature are rejected even
+// when no external scanner is configured.
+func unsafeDocumentContent(mediaType string, data []byte) bool {
+	upper := bytes.ToUpper(data)
+	if bytes.Contains(upper, []byte("EICAR-STANDARD-ANTIVIRUS-TEST-FILE")) {
+		return true
+	}
+	if mediaType != "application/pdf" {
+		return false
+	}
+	for _, marker := range [][]byte{[]byte("/JAVASCRIPT"), []byte("/JS"), []byte("/LAUNCH"), []byte("/OPENACTION"), []byte("/EMBEDDEDFILE")} {
+		if bytes.Contains(upper, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *LocalStorage) Open(ctx context.Context, key string) (ReadSeekCloser, error) {

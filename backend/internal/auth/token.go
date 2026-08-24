@@ -13,13 +13,15 @@ import (
 type ActorType string
 
 const (
-	ActorStaff ActorType = "staff"
-	ActorGuest ActorType = "guest"
+	ActorStaff      ActorType = "staff"
+	ActorGuest      ActorType = "guest"
+	ActorInvitation ActorType = "invitation"
 )
 
 const (
-	staffAudience = "hotelmate:staff"
-	guestAudience = "hotelmate:guest"
+	staffAudience      = "hotelmate:staff"
+	guestAudience      = "hotelmate:guest"
+	invitationAudience = "hotelmate:check-in-invitation"
 )
 
 type Claims struct {
@@ -74,6 +76,19 @@ func (m *TokenManager) IssueGuest(stay models.Stay) (string, time.Time, error) {
 	return m.issue(stay.GuestID, stay.HotelID, ActorGuest, "", stay.ID, guestAudience, m.guestTTL)
 }
 
+// IssueCheckInInvitation creates a signed, purpose-bound invitation. The
+// reservation identifier is the JWT subject and no guest identity is encoded.
+func (m *TokenManager) IssueCheckInInvitation(reservationID, hotelID uuid.UUID, ttl time.Duration) (string, time.Time, error) {
+	if ttl <= 0 || ttl > 30*24*time.Hour {
+		return "", time.Time{}, errors.New("invitation TTL must be between zero and 30 days")
+	}
+	return m.issue(reservationID, hotelID, ActorInvitation, "", uuid.Nil, invitationAudience, ttl)
+}
+
+func (m *TokenManager) ParseCheckInInvitation(tokenString string) (*Claims, error) {
+	return m.parse(tokenString, ActorInvitation, invitationAudience)
+}
+
 func (m *TokenManager) issue(subject, hotelID uuid.UUID, actor ActorType, role string, stayID uuid.UUID, audience string, ttl time.Duration) (string, time.Time, error) {
 	now := m.now().UTC()
 	expiresAt := now.Add(ttl)
@@ -107,6 +122,10 @@ func (m *TokenManager) Parse(tokenString string, expectedActor ActorType) (*Clai
 	if err != nil {
 		return nil, err
 	}
+	return m.parse(tokenString, expectedActor, audience)
+}
+
+func (m *TokenManager) parse(tokenString string, expectedActor ActorType, audience string) (*Claims, error) {
 	claims := &Claims{}
 	token, err := jwt.ParseWithClaims(
 		tokenString,
@@ -145,6 +164,8 @@ func audienceFor(actor ActorType) (string, error) {
 		return staffAudience, nil
 	case ActorGuest:
 		return guestAudience, nil
+	case ActorInvitation:
+		return invitationAudience, nil
 	default:
 		return "", errors.New("unsupported actor type")
 	}

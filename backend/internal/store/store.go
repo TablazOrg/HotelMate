@@ -67,7 +67,11 @@ func (s *GORMStore) CreateHotelWithPrimaryAdmin(ctx context.Context, onboarding 
 			return err
 		}
 		knowledge := models.DefaultKnowledge(onboarding.Hotel.ID, time.Now().UTC())
-		return tx.Create(&knowledge).Error
+		if err := tx.Create(&knowledge).Error; err != nil {
+			return err
+		}
+		arrivalSettings := models.DefaultArrivalSettings(onboarding.Hotel.ID)
+		return tx.Create(&arrivalSettings).Error
 	})
 }
 

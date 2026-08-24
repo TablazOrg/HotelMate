@@ -283,6 +283,43 @@ func (a *App) retention(ctx context.Context, config resolvedConfig, path []strin
 			break
 		}
 	}
+	for {
+		documentItems, signatureItems, err := repository.ListExpiredArrivalEvidence(databaseContext, a.Now().UTC(), 100)
+		if err != nil {
+			return nil, failure(ExitCommand, "list expired arrival evidence failed", err)
+		}
+		if len(documentItems) == 0 && len(signatureItems) == 0 {
+			break
+		}
+		batchPurged := 0
+		for _, item := range documentItems {
+			if err := storage.Delete(databaseContext, item.StorageKey); err != nil {
+				failed++
+				continue
+			}
+			if err := repository.MarkArrivalDocumentDeleted(databaseContext, item.ID, a.Now().UTC()); err != nil {
+				failed++
+				continue
+			}
+			purged++
+			batchPurged++
+		}
+		for _, item := range signatureItems {
+			if err := storage.Delete(databaseContext, item.SignatureStorageKey); err != nil {
+				failed++
+				continue
+			}
+			if err := repository.MarkArrivalSignatureDeleted(databaseContext, item.ID, a.Now().UTC()); err != nil {
+				failed++
+				continue
+			}
+			purged++
+			batchPurged++
+		}
+		if (len(documentItems) < 100 && len(signatureItems) < 100) || batchPurged == 0 {
+			break
+		}
+	}
 	data := map[string]any{"environment": config.Environment, "purged": purged, "failed": failed, "resource": "documents"}
 	if failed > 0 {
 		return data, failure(ExitVerification, fmt.Sprintf("%d documents could not be purged", failed), nil)

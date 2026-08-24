@@ -14,6 +14,7 @@ import (
 	"github.com/TablazOrg/HotelMate/backend/internal/auth"
 	"github.com/TablazOrg/HotelMate/backend/internal/concierge"
 	"github.com/TablazOrg/HotelMate/backend/internal/documents"
+	"github.com/TablazOrg/HotelMate/backend/internal/identity"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
 	"github.com/TablazOrg/HotelMate/backend/internal/observability"
 	"github.com/TablazOrg/HotelMate/backend/internal/realtime"
@@ -25,12 +26,14 @@ type Dependencies struct {
 	DB                *gorm.DB
 	Store             store.Store
 	Lifecycle         store.LifecycleStore
+	Arrival           store.ArrivalStore
 	ServiceOperations store.ServiceOperationsStore
 	Content           store.ContentStore
 	Conversations     store.ConversationStore
 	Reporting         store.ReportingStore
 	Concierge         concierge.Provider
 	Documents         documents.Storage
+	IdentityVerifier  identity.Provider
 	Realtime          *realtime.Hub
 	Tokens            *auth.TokenManager
 	Version           string
@@ -49,12 +52,14 @@ type Server struct {
 	db                *gorm.DB
 	store             store.Store
 	lifecycle         store.LifecycleStore
+	arrival           store.ArrivalStore
 	serviceOperations store.ServiceOperationsStore
 	content           store.ContentStore
 	conversations     store.ConversationStore
 	reporting         store.ReportingStore
 	concierge         concierge.Provider
 	documents         documents.Storage
+	identityVerifier  identity.Provider
 	realtime          *realtime.Hub
 	tokens            *auth.TokenManager
 	version           string
@@ -82,6 +87,9 @@ func NewHandler(deps Dependencies) http.Handler {
 	if deps.Concierge == nil {
 		deps.Concierge = concierge.ApprovedKnowledgeProvider{}
 	}
+	if deps.IdentityVerifier == nil {
+		deps.IdentityVerifier = identity.ManualProvider{}
+	}
 	if deps.ChatRetention <= 0 {
 		deps.ChatRetention = 90 * 24 * time.Hour
 	}
@@ -95,7 +103,9 @@ func NewHandler(deps Dependencies) http.Handler {
 		db:                deps.DB,
 		store:             deps.Store,
 		lifecycle:         deps.Lifecycle,
+		arrival:           deps.Arrival,
 		documents:         deps.Documents,
+		identityVerifier:  deps.IdentityVerifier,
 		serviceOperations: deps.ServiceOperations,
 		content:           deps.Content,
 		conversations:     deps.Conversations,
@@ -135,6 +145,7 @@ func NewHandler(deps Dependencies) http.Handler {
 	mux.Handle("POST /api/v1/staff/users", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.createStaff)))
 	mux.Handle("PATCH /api/v1/staff/hotel", s.require(auth.ActorStaff, models.StaffRolePrimaryAdmin, models.StaffRoleSecondaryAdmin)(http.HandlerFunc(s.updateHotelBranding)))
 	s.registerLifecycleRoutes(mux)
+	s.registerArrivalRoutes(mux)
 	s.registerServiceOperationRoutes(mux)
 	s.registerContentRoutes(mux)
 	s.registerConversationRoutes(mux)
@@ -213,7 +224,7 @@ func withCORS(allowedOrigins []string, next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Add("Vary", "Origin")
 		}
-		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-Onboarding-Token, X-Request-ID")
+		w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, Idempotency-Key, X-Onboarding-Token, X-Request-ID")
 		w.Header().Set("Access-Control-Expose-Headers", "X-Request-ID, Retry-After")
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		if r.Method == http.MethodOptions {

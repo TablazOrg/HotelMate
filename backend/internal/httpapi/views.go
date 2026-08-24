@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
@@ -146,6 +147,135 @@ func toOnlineCheckInView(checkIn models.OnlineCheckIn, includeStay bool) onlineC
 	if includeStay {
 		stay := toStayView(checkIn.Stay)
 		view.Stay = &stay
+	}
+	return view
+}
+
+type arrivalSettingsView struct {
+	OnlineCheckInEnabled       bool            `json:"onlineCheckInEnabled"`
+	DigitalRegistrationEnabled bool            `json:"digitalRegistrationEnabled"`
+	PaymentStepEnabled         bool            `json:"paymentStepEnabled"`
+	InvitationTTLHours         int             `json:"invitationTtlHours"`
+	TermsVersion               string          `json:"termsVersion"`
+	TermsLocale                string          `json:"termsLocale"`
+	TermsText                  string          `json:"termsText"`
+	Steps                      json.RawMessage `json:"steps"`
+	DocumentPurpose            string          `json:"documentPurpose"`
+}
+
+func toArrivalSettingsView(settings models.ArrivalSettings) arrivalSettingsView {
+	return arrivalSettingsView{
+		OnlineCheckInEnabled: settings.OnlineCheckInEnabled, DigitalRegistrationEnabled: settings.DigitalRegistrationEnabled,
+		PaymentStepEnabled: settings.PaymentStepEnabled, InvitationTTLHours: settings.InvitationTTLHours,
+		TermsVersion: settings.TermsVersion, TermsLocale: settings.TermsLocale, TermsText: settings.TermsText, Steps: settings.StepsJSON,
+		DocumentPurpose: "مدارک فقط برای تطبیق هویت و تکمیل ثبت اقامت در اختیار پرسنل مجاز قرار می‌گیرد و پس از پایان دوره نگهداری حذف می‌شود.",
+	}
+}
+
+type arrivalDocumentView struct {
+	ID                uuid.UUID  `json:"id"`
+	CompanionID       *uuid.UUID `json:"companionId"`
+	EvidenceType      string     `json:"evidenceType"`
+	Side              string     `json:"side"`
+	Name              string     `json:"name"`
+	MediaType         string     `json:"mediaType"`
+	Size              int64      `json:"size"`
+	VerificationState string     `json:"verificationState"`
+	VerificationNote  string     `json:"verificationNote"`
+	RetentionUntil    time.Time  `json:"retentionUntil"`
+	CreatedAt         time.Time  `json:"createdAt"`
+}
+
+func toArrivalDocumentView(document models.ArrivalDocument) arrivalDocumentView {
+	return arrivalDocumentView{
+		ID: document.ID, CompanionID: document.CompanionID, EvidenceType: document.EvidenceType, Side: document.Side,
+		Name: document.Name, MediaType: document.MediaType, Size: document.Size,
+		VerificationState: document.VerificationState, VerificationNote: document.VerificationNote,
+		RetentionUntil: document.RetentionUntil, CreatedAt: document.CreatedAt,
+	}
+}
+
+type arrivalCompanionView struct {
+	ID               uuid.UUID  `json:"id"`
+	FirstName        string     `json:"firstName"`
+	LastName         string     `json:"lastName"`
+	Relationship     string     `json:"relationship"`
+	Nationality      string     `json:"nationality"`
+	DateOfBirth      *time.Time `json:"dateOfBirth"`
+	DocumentRequired bool       `json:"documentRequired"`
+}
+
+type arrivalPaymentStepView struct {
+	Required   bool   `json:"required"`
+	Status     string `json:"status"`
+	Capability string `json:"capability"`
+}
+
+type arrivalView struct {
+	ID                 uuid.UUID               `json:"id"`
+	Status             models.ArrivalStatus    `json:"status"`
+	CurrentStep        int                     `json:"currentStep"`
+	CompletenessScore  int                     `json:"completenessScore"`
+	RiskState          string                  `json:"riskState"`
+	ContactPhone       string                  `json:"contactPhone"`
+	ContactEmail       string                  `json:"contactEmail"`
+	Nationality        string                  `json:"nationality"`
+	ArrivalETA         *time.Time              `json:"arrivalEta"`
+	ArrivalMethod      string                  `json:"arrivalMethod"`
+	TransportDetails   string                  `json:"transportDetails"`
+	AccessibilityNeeds string                  `json:"accessibilityNeeds"`
+	SpecialRequests    string                  `json:"specialRequests"`
+	Answers            json.RawMessage         `json:"answers"`
+	TermsVersion       string                  `json:"termsVersion"`
+	TermsLocale        string                  `json:"termsLocale"`
+	SignerName         string                  `json:"signerName"`
+	ConsentAt          *time.Time              `json:"consentAt"`
+	SignaturePresent   bool                    `json:"signaturePresent"`
+	SubmittedAt        *time.Time              `json:"submittedAt"`
+	ReviewedAt         *time.Time              `json:"reviewedAt"`
+	ReviewedByID       *uuid.UUID              `json:"reviewedById"`
+	ReviewOwnerID      *uuid.UUID              `json:"reviewOwnerId"`
+	NeedsChangesReason string                  `json:"needsChangesReason"`
+	ApprovedAt         *time.Time              `json:"approvedAt"`
+	ArrivalPendingAt   *time.Time              `json:"arrivalPendingAt"`
+	RoomReadyAt        *time.Time              `json:"roomReadyAt"`
+	CheckedInAt        *time.Time              `json:"checkedInAt"`
+	CancelledAt        *time.Time              `json:"cancelledAt"`
+	ExpiresAt          time.Time               `json:"expiresAt"`
+	Reservation        reservationView         `json:"reservation"`
+	Stay               stayView                `json:"stay"`
+	Documents          []arrivalDocumentView   `json:"documents"`
+	Companions         []arrivalCompanionView  `json:"companions"`
+	PaymentStep        *arrivalPaymentStepView `json:"paymentStep,omitempty"`
+}
+
+func toArrivalView(journey models.ArrivalJourney) arrivalView {
+	view := arrivalView{
+		ID: journey.ID, Status: journey.Status, CurrentStep: journey.CurrentStep, CompletenessScore: journey.CompletenessScore,
+		RiskState: journey.RiskState, ContactPhone: journey.ContactPhone, ContactEmail: journey.ContactEmail,
+		Nationality: journey.Nationality, ArrivalETA: journey.ArrivalETA, ArrivalMethod: journey.ArrivalMethod,
+		TransportDetails: journey.TransportDetails, AccessibilityNeeds: journey.AccessibilityNeeds, SpecialRequests: journey.SpecialRequests,
+		Answers: journey.AnswersJSON, TermsVersion: journey.TermsVersion, TermsLocale: journey.TermsLocale,
+		SignerName: journey.SignerName, ConsentAt: journey.ConsentAt,
+		SignaturePresent: journey.SignatureStorageKey != "" && journey.SignatureDeletedAt == nil,
+		SubmittedAt:      journey.SubmittedAt, ReviewedAt: journey.ReviewedAt, ReviewedByID: journey.ReviewedByID,
+		ReviewOwnerID: journey.ReviewOwnerID, NeedsChangesReason: journey.NeedsChangesReason,
+		ApprovedAt: journey.ApprovedAt, ArrivalPendingAt: journey.ArrivalPendingAt, RoomReadyAt: journey.RoomReadyAt,
+		CheckedInAt: journey.CheckedInAt, CancelledAt: journey.CancelledAt, ExpiresAt: journey.ExpiresAt,
+		Reservation: toReservationView(journey.Reservation), Stay: toStayView(journey.Stay),
+		Documents: make([]arrivalDocumentView, 0, len(journey.Documents)), Companions: make([]arrivalCompanionView, 0, len(journey.Companions)),
+	}
+	if journey.PaymentStep != nil {
+		view.PaymentStep = &arrivalPaymentStepView{Required: journey.PaymentStep.Required, Status: journey.PaymentStep.Status, Capability: journey.PaymentStep.Capability}
+	}
+	if len(view.Answers) == 0 {
+		view.Answers = json.RawMessage(`{}`)
+	}
+	for _, document := range journey.Documents {
+		view.Documents = append(view.Documents, toArrivalDocumentView(document))
+	}
+	for _, companion := range journey.Companions {
+		view.Companions = append(view.Companions, arrivalCompanionView{ID: companion.ID, FirstName: companion.FirstName, LastName: companion.LastName, Relationship: companion.Relationship, Nationality: companion.Nationality, DateOfBirth: companion.DateOfBirth, DocumentRequired: companion.DocumentRequired})
 	}
 	return view
 }

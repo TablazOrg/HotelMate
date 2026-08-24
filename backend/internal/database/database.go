@@ -41,6 +41,7 @@ var migrationSteps = []migrationStep{
 	{version: "2026082205_conversations_knowledge", apply: migrateConversationsKnowledge},
 	{version: "2026082206_reporting_hardening", apply: migrateReportingHardening},
 	{version: "2026082207_query_observability", apply: migrateQueryObservability},
+	{version: "2026082308_arrival_readiness", apply: migrateArrivalReadiness},
 }
 
 func MigrationVersions() []string {
@@ -183,6 +184,37 @@ func migrateReportingHardening(db *gorm.DB) error {
 func migrateQueryObservability(db *gorm.DB) error {
 	if err := db.Exec("CREATE EXTENSION IF NOT EXISTS pg_stat_statements").Error; err != nil {
 		return fmt.Errorf("enable pg_stat_statements: %w", err)
+	}
+	return nil
+}
+
+func migrateArrivalReadiness(db *gorm.DB) error {
+	if err := db.AutoMigrate(
+		&models.ArrivalSettings{},
+		&models.CheckInInvitation{},
+		&models.ArrivalJourney{},
+		&models.ArrivalCompanion{},
+		&models.ArrivalDocument{},
+		&models.ArrivalPaymentStep{},
+		&models.ArrivalEvent{},
+	); err != nil {
+		return err
+	}
+	var hotels []models.Hotel
+	if err := db.Find(&hotels).Error; err != nil {
+		return err
+	}
+	for _, hotel := range hotels {
+		var count int64
+		if err := db.Model(&models.ArrivalSettings{}).Where("hotel_id = ?", hotel.ID).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			settings := models.DefaultArrivalSettings(hotel.ID)
+			if err := db.Create(&settings).Error; err != nil {
+				return err
+			}
+		}
 	}
 	return nil
 }

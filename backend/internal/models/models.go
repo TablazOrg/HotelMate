@@ -164,6 +164,165 @@ type OnlineCheckIn struct {
 	DocumentDeletedAt  *time.Time          `gorm:"index" json:"documentDeletedAt"`
 }
 
+// ArrivalSettings is the tenant-scoped, fail-closed rollout contract for the
+// M8 online check-in journey. StepsJSON contains only configuration (never
+// guest answers) so it is safe to expose to an invited guest.
+type ArrivalSettings struct {
+	BaseModel
+	HotelID                    uuid.UUID       `gorm:"type:uuid;not null;uniqueIndex" json:"hotelId"`
+	OnlineCheckInEnabled       bool            `gorm:"not null;default:false" json:"onlineCheckInEnabled"`
+	DigitalRegistrationEnabled bool            `gorm:"not null;default:false" json:"digitalRegistrationEnabled"`
+	PaymentStepEnabled         bool            `gorm:"not null;default:false" json:"paymentStepEnabled"`
+	InvitationTTLHours         int             `gorm:"not null;default:168" json:"invitationTtlHours"`
+	TermsVersion               string          `gorm:"size:64;not null;default:v1" json:"termsVersion"`
+	TermsLocale                string          `gorm:"size:12;not null;default:fa-IR" json:"termsLocale"`
+	TermsText                  string          `gorm:"type:text;not null" json:"termsText"`
+	StepsJSON                  json.RawMessage `gorm:"type:jsonb;not null;default:'[]'" json:"steps"`
+}
+
+func DefaultArrivalSettings(hotelID uuid.UUID) ArrivalSettings {
+	return ArrivalSettings{
+		HotelID: hotelID, InvitationTTLHours: 168, TermsVersion: "v1", TermsLocale: "fa-IR",
+		TermsText: "با امضای این فرم، درستی اطلاعات ثبت‌شده و مطالعه مقررات اقامت هتل را تأیید می‌کنم.",
+		StepsJSON: json.RawMessage(`[
+			{"id":"details","order":1,"required":true,"title":"اطلاعات مهمان و ورود"},
+			{"id":"documents","order":2,"required":true,"title":"مدارک و ثبت دیجیتال"},
+			{"id":"review","order":3,"required":true,"title":"بازبینی و ارسال"}
+		]`),
+	}
+}
+
+type CheckInInvitation struct {
+	BaseModel
+	HotelID          uuid.UUID  `gorm:"type:uuid;not null;index" json:"hotelId"`
+	ReservationID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"reservationId"`
+	TokenHash        string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	RecoveryCodeHash string     `gorm:"size:64;not null;uniqueIndex" json:"-"`
+	CreatedByID      uuid.UUID  `gorm:"type:uuid;not null;index" json:"createdById"`
+	ExpiresAt        time.Time  `gorm:"not null;index" json:"expiresAt"`
+	OpenedAt         *time.Time `json:"openedAt"`
+	LastOpenedAt     *time.Time `json:"lastOpenedAt"`
+	RevokedAt        *time.Time `gorm:"index" json:"revokedAt"`
+	RevokedByID      *uuid.UUID `gorm:"type:uuid;index" json:"revokedById"`
+}
+
+type ArrivalStatus string
+
+const (
+	ArrivalDraft        ArrivalStatus = "draft"
+	ArrivalSubmitted    ArrivalStatus = "submitted"
+	ArrivalNeedsChanges ArrivalStatus = "needs_changes"
+	ArrivalApproved     ArrivalStatus = "approved"
+	ArrivalPending      ArrivalStatus = "arrival_pending"
+	ArrivalRoomReady    ArrivalStatus = "room_ready"
+	ArrivalCheckedIn    ArrivalStatus = "checked_in"
+	ArrivalExpired      ArrivalStatus = "expired"
+	ArrivalCancelled    ArrivalStatus = "cancelled"
+)
+
+// ArrivalJourney holds resumable guest-entered data. Sensitive evidence bytes
+// remain in private document storage and are never serialized from this model.
+type ArrivalJourney struct {
+	BaseModel
+	HotelID              uuid.UUID           `gorm:"type:uuid;not null;index" json:"hotelId"`
+	ReservationID        uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex" json:"reservationId"`
+	Reservation          Reservation         `json:"reservation"`
+	StayID               uuid.UUID           `gorm:"type:uuid;not null;uniqueIndex" json:"stayId"`
+	Stay                 Stay                `json:"stay"`
+	Status               ArrivalStatus       `gorm:"size:24;not null;default:draft;index" json:"status"`
+	CurrentStep          int                 `gorm:"not null;default:1" json:"currentStep"`
+	CompletenessScore    int                 `gorm:"not null;default:0" json:"completenessScore"`
+	RiskState            string              `gorm:"size:32;not null;default:incomplete;index" json:"riskState"`
+	ContactPhone         string              `gorm:"size:40" json:"contactPhone"`
+	ContactEmail         string              `gorm:"size:254" json:"contactEmail"`
+	Nationality          string              `gorm:"size:80" json:"nationality"`
+	ArrivalETA           *time.Time          `json:"arrivalEta"`
+	ArrivalMethod        string              `gorm:"size:32" json:"arrivalMethod"`
+	TransportDetails     string              `gorm:"size:500" json:"transportDetails"`
+	AccessibilityNeeds   string              `gorm:"size:1000" json:"accessibilityNeeds"`
+	SpecialRequests      string              `gorm:"size:1000" json:"specialRequests"`
+	AnswersJSON          json.RawMessage     `gorm:"type:jsonb;not null;default:'{}'" json:"answers"`
+	TermsVersion         string              `gorm:"size:64" json:"termsVersion"`
+	TermsLocale          string              `gorm:"size:12" json:"termsLocale"`
+	SignerName           string              `gorm:"size:180" json:"signerName"`
+	ConsentAt            *time.Time          `json:"consentAt"`
+	SignatureStorageKey  string              `gorm:"size:500" json:"-"`
+	SignatureMediaType   string              `gorm:"size:64" json:"-"`
+	SignatureSize        int64               `json:"-"`
+	SignatureSHA256      string              `gorm:"size:64" json:"-"`
+	SignatureDeletedAt   *time.Time          `gorm:"index" json:"-"`
+	DetailsCompletedAt   *time.Time          `json:"detailsCompletedAt"`
+	DocumentsCompletedAt *time.Time          `json:"documentsCompletedAt"`
+	SubmittedAt          *time.Time          `gorm:"index" json:"submittedAt"`
+	ReviewedAt           *time.Time          `json:"reviewedAt"`
+	ReviewedByID         *uuid.UUID          `gorm:"type:uuid;index" json:"reviewedById"`
+	ReviewOwnerID        *uuid.UUID          `gorm:"type:uuid;index" json:"reviewOwnerId"`
+	NeedsChangesReason   string              `gorm:"size:1000" json:"needsChangesReason"`
+	ApprovedAt           *time.Time          `json:"approvedAt"`
+	ArrivalPendingAt     *time.Time          `json:"arrivalPendingAt"`
+	RoomReadyAt          *time.Time          `json:"roomReadyAt"`
+	CheckedInAt          *time.Time          `json:"checkedInAt"`
+	CancelledAt          *time.Time          `json:"cancelledAt"`
+	ExpiresAt            time.Time           `gorm:"not null;index" json:"expiresAt"`
+	LastIdempotencyKey   string              `gorm:"size:128" json:"-"`
+	Documents            []ArrivalDocument   `gorm:"foreignKey:JourneyID" json:"documents"`
+	Companions           []ArrivalCompanion  `gorm:"foreignKey:JourneyID" json:"companions"`
+	PaymentStep          *ArrivalPaymentStep `gorm:"foreignKey:JourneyID" json:"paymentStep,omitempty"`
+}
+
+type ArrivalCompanion struct {
+	BaseModel
+	HotelID          uuid.UUID  `gorm:"type:uuid;not null;index" json:"hotelId"`
+	JourneyID        uuid.UUID  `gorm:"type:uuid;not null;index" json:"journeyId"`
+	FirstName        string     `gorm:"size:100;not null" json:"firstName"`
+	LastName         string     `gorm:"size:100;not null" json:"lastName"`
+	Relationship     string     `gorm:"size:64" json:"relationship"`
+	Nationality      string     `gorm:"size:80" json:"nationality"`
+	DateOfBirth      *time.Time `json:"dateOfBirth"`
+	DocumentRequired bool       `gorm:"not null;default:true" json:"documentRequired"`
+}
+
+type ArrivalDocument struct {
+	BaseModel
+	HotelID           uuid.UUID  `gorm:"type:uuid;not null;index" json:"hotelId"`
+	JourneyID         uuid.UUID  `gorm:"type:uuid;not null;index" json:"journeyId"`
+	CompanionID       *uuid.UUID `gorm:"type:uuid;index" json:"companionId"`
+	EvidenceType      string     `gorm:"size:32;not null" json:"evidenceType"`
+	Side              string     `gorm:"size:16;not null;default:single" json:"side"`
+	StorageKey        string     `gorm:"size:500;not null;uniqueIndex" json:"-"`
+	Name              string     `gorm:"size:180;not null" json:"name"`
+	MediaType         string     `gorm:"size:64;not null" json:"mediaType"`
+	Size              int64      `gorm:"not null" json:"size"`
+	SHA256            string     `gorm:"size:64;not null" json:"-"`
+	VerificationState string     `gorm:"size:32;not null;default:manual_review" json:"verificationState"`
+	VerificationNote  string     `gorm:"size:500" json:"verificationNote"`
+	RetentionUntil    time.Time  `gorm:"not null;index" json:"retentionUntil"`
+	DeletedAtStorage  *time.Time `gorm:"index" json:"deletedAtStorage"`
+}
+
+// ArrivalPaymentStep is an intentionally provider-neutral contract. M8 keeps
+// it disabled by default; M11 can implement collection without changing the
+// journey state machine.
+type ArrivalPaymentStep struct {
+	BaseModel
+	HotelID    uuid.UUID `gorm:"type:uuid;not null;index" json:"hotelId"`
+	JourneyID  uuid.UUID `gorm:"type:uuid;not null;uniqueIndex" json:"journeyId"`
+	Required   bool      `gorm:"not null;default:false" json:"required"`
+	Status     string    `gorm:"size:24;not null;default:not_required" json:"status"`
+	Capability string    `gorm:"size:64;not null;default:deferred_to_m11" json:"capability"`
+}
+
+type ArrivalEvent struct {
+	BaseModel
+	HotelID    uuid.UUID  `gorm:"type:uuid;not null;index" json:"hotelId"`
+	JourneyID  uuid.UUID  `gorm:"type:uuid;not null;index" json:"journeyId"`
+	EventType  string     `gorm:"size:32;not null;index" json:"eventType"`
+	Step       int        `gorm:"not null;default:0;index" json:"step"`
+	ActorType  string     `gorm:"size:16;not null" json:"actorType"`
+	ActorID    *uuid.UUID `gorm:"type:uuid;index" json:"actorId,omitempty"`
+	DurationMS int64      `gorm:"not null;default:0" json:"durationMs"`
+}
+
 type ServiceCategory string
 
 const (

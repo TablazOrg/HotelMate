@@ -3,7 +3,7 @@ import {
   ApiError, api, clearSession, type GuestLoginResponse, type Hotel, loadSession, saveSession,
   type SessionRecord, type Staff, type StaffLoginResponse, type StaffRole, type Stay,
 } from './api'
-import { GuestCheckInPanel } from './GuestCheckInPanel'
+import { ArrivalWizard, ArrivalsWorkspace, InvitationExchange } from './ArrivalExperience'
 import { GuestExperience } from './GuestExperience'
 import { ContentAdminPanel, PreArrivalOrders, VisitorExperience } from './HotelContentPanels'
 import { KnowledgeAdminPanel, StaffConversationInbox } from './ConversationPanels'
@@ -13,7 +13,7 @@ import { AdminRequestOverview, ServiceCatalogPanel, StaffRequestQueue } from './
 import { formatDate, handoffTheme, toFaDigits } from './handoff'
 
 type AuthenticatedState = { session: SessionRecord; staff?: Staff; hotel?: Hotel; stay?: Stay }
-type AdminTab = 'dashboard' | 'reception' | 'catalog' | 'content' | 'conversations' | 'reports' | 'security' | 'branding' | 'staff' | 'knowledge'
+type AdminTab = 'dashboard' | 'arrivals' | 'reception' | 'catalog' | 'content' | 'conversations' | 'reports' | 'security' | 'branding' | 'staff' | 'knowledge'
 
 const roleLabels: Record<StaffRole, string> = {
   primary_admin: 'مدیر اصلی', secondary_admin: 'مدیر دوم', operations_manager: 'مدیر عملیات',
@@ -56,7 +56,10 @@ function App() {
   }
 
   if (booting) return <div className="loading-screen"><span className="spinner" />در حال بازیابی نشست…</div>
-  if (!authState) return window.location.pathname.startsWith('/visitor') ? <VisitorExperience /> : <LoginScreen onAuthenticated={authenticate} />
+  if (!authState) {
+    if (window.location.pathname.startsWith('/check-in')) return <InvitationExchange onAuthenticated={authenticate} />
+    return window.location.pathname.startsWith('/visitor') ? <VisitorExperience /> : <LoginScreen onAuthenticated={authenticate} />
+  }
   if (authState.session.actorType === 'guest' && authState.stay) {
     return authState.stay.status === 'pre_arrival'
       ? <PreArrivalExperience stay={authState.stay} token={authState.session.token} onLogout={logout} />
@@ -142,7 +145,7 @@ function PreArrivalExperience({ stay, token, onLogout }: { stay: Stay; token: st
       <span className="confirmed-pill"><i className="ri-checkbox-circle-fill" /> رزرو تأیید شد</span>
       <h1>{days ? `تا اقامت شما ${toFaDigits(days)} روز مانده` : 'برای اقامت شما آماده‌ایم'}</h1>
       <p className="reservation-line">{stay.hotel.name} · {stay.room.type || 'اتاق رزرو شده'} · {formatDate(arrival)} تا {formatDate(departure)}</p>
-      <GuestCheckInPanel token={token} />
+      <ArrivalWizard token={token} />
       <PreArrivalOrders token={token} />
     </main>
   </div></div>
@@ -160,6 +163,7 @@ function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { ses
 
   const navigation: { id: AdminTab; icon: string; label: string; visible: boolean }[] = [
     { id: 'dashboard', icon: 'ri-dashboard-line', label: 'داشبورد', visible: canReport },
+    { id: 'arrivals', icon: 'ri-passport-line', label: 'آمادگی ورود', visible: hasReception },
     { id: 'reception', icon: 'ri-hotel-line', label: 'رزرو و پذیرش', visible: hasReception },
     { id: 'catalog', icon: 'ri-layout-grid-line', label: 'کاتالوگ سرویس‌ها', visible: true },
     { id: 'content', icon: 'ri-store-2-line', label: 'امکانات و منو', visible: canManageCatalog },
@@ -174,6 +178,7 @@ function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { ses
     <aside className="admin-sidebar"><div className="admin-logo"><img src={hotel.logoUrl || '/hotelmate-logo.svg'} alt="" /><div><strong>{hotel.name}</strong><small>پنل مدیریت</small></div></div><p className="nav-eyebrow">فضای کاری</p><nav>{navigation.filter((item) => item.visible).map((item) => <button type="button" key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}><i className={item.icon} />{item.label}</button>)}</nav><div className="admin-identity"><span>{initialStaff.firstName.slice(0, 1)}{initialStaff.lastName.slice(0, 1)}</span><div><strong>{initialStaff.firstName} {initialStaff.lastName}</strong><small>{roleLabels[initialStaff.role]}</small></div><button type="button" onClick={onLogout} title="خروج"><i className="ri-logout-box-r-line" /></button></div></aside>
     <main className="admin-content">
       {tab === 'dashboard' && <AdminRequestOverview token={session.token} />}
+      {tab === 'arrivals' && <ArrivalsWorkspace token={session.token} canManageSettings={isAdmin} />}
       {tab === 'reception' && <OperationsPanel token={session.token} />}
       {tab === 'catalog' && <ServiceCatalogPanel token={session.token} canManage={canManageCatalog} />}
       {tab === 'content' && <ContentAdminPanel token={session.token} />}

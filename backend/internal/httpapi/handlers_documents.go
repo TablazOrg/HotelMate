@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/TablazOrg/HotelMate/backend/internal/documents"
 	"github.com/TablazOrg/HotelMate/backend/internal/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -19,6 +18,13 @@ func (s *Server) guestOnlineCheckIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stay, _ := currentStay(r)
+	if s.arrival != nil {
+		settings, err := s.arrival.GetArrivalSettings(r.Context(), stay.HotelID)
+		if err != nil || !settings.OnlineCheckInEnabled || !settings.DigitalRegistrationEnabled {
+			writeError(w, http.StatusForbidden, "online_check_in_disabled", "چک‌این آنلاین برای این هتل فعال نیست")
+			return
+		}
+	}
 	checkIn, err := s.lifecycle.GetOnlineCheckInByStay(r.Context(), stay.HotelID, stay.ID)
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		writeJSON(w, http.StatusOK, map[string]any{"onlineCheckIn": nil})
@@ -41,6 +47,13 @@ func (s *Server) submitOnlineCheckIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	stay, _ := currentStay(r)
+	if s.arrival != nil {
+		settings, err := s.arrival.GetArrivalSettings(r.Context(), stay.HotelID)
+		if err != nil || !settings.OnlineCheckInEnabled || !settings.DigitalRegistrationEnabled {
+			writeError(w, http.StatusForbidden, "online_check_in_disabled", "چک‌این آنلاین برای این هتل فعال نیست")
+			return
+		}
+	}
 	if stay.Status != models.StayPreArrival {
 		writeError(w, http.StatusConflict, "invalid_transition", "چک‌این آنلاین فقط پیش از ورود امکان‌پذیر است")
 		return
@@ -62,15 +75,7 @@ func (s *Server) submitOnlineCheckIn(w http.ResponseWriter, r *http.Request) {
 	defer file.Close()
 	saved, err := s.documents.Save(r.Context(), stay.HotelID, file, header.Filename)
 	if err != nil {
-		switch {
-		case errors.Is(err, documents.ErrTooLarge):
-			writeError(w, http.StatusRequestEntityTooLarge, "document_too_large", "حجم مدرک بیش از حد مجاز است")
-		case errors.Is(err, documents.ErrUnsupportedType):
-			writeError(w, http.StatusUnsupportedMediaType, "unsupported_document", "فقط PDF، JPG یا PNG پذیرفته می‌شود")
-		default:
-			s.logger.Error("save check-in document", "error", err)
-			writeError(w, http.StatusInternalServerError, "internal_server_error", "ذخیره مدرک انجام نشد")
-		}
+		writeDocumentSaveError(w, err)
 		return
 	}
 	now := time.Now().UTC()

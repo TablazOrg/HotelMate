@@ -95,6 +95,111 @@ export interface OnlineCheckIn {
   stay?: Stay
 }
 
+export type ArrivalStatus =
+  | 'draft' | 'submitted' | 'needs_changes' | 'approved' | 'arrival_pending'
+  | 'room_ready' | 'checked_in' | 'expired' | 'cancelled'
+
+export interface ArrivalStep {
+  id: 'details' | 'documents' | 'review'
+  order: number
+  required: boolean
+  title: string
+}
+
+export interface ArrivalSettings {
+  onlineCheckInEnabled: boolean
+  digitalRegistrationEnabled: boolean
+  paymentStepEnabled: boolean
+  invitationTtlHours: number
+  termsVersion: string
+  termsLocale: string
+  termsText: string
+  steps: ArrivalStep[]
+  documentPurpose: string
+}
+
+export interface ArrivalCompanion {
+  id: string
+  firstName: string
+  lastName: string
+  relationship: string
+  nationality: string
+  dateOfBirth: string | null
+  documentRequired: boolean
+}
+
+export interface ArrivalDocument {
+  id: string
+  companionId: string | null
+  evidenceType: 'identity' | 'passport' | 'visa' | 'other'
+  side: 'single' | 'front' | 'back'
+  name: string
+  mediaType: string
+  size: number
+  verificationState: string
+  verificationNote: string
+  retentionUntil: string
+  createdAt: string
+}
+
+export interface ArrivalJourney {
+  id: string
+  status: ArrivalStatus
+  currentStep: number
+  completenessScore: number
+  riskState: string
+  contactPhone: string
+  contactEmail: string
+  nationality: string
+  arrivalEta: string | null
+  arrivalMethod: string
+  transportDetails: string
+  accessibilityNeeds: string
+  specialRequests: string
+  answers: Record<string, unknown>
+  termsVersion: string
+  termsLocale: string
+  signerName: string
+  consentAt: string | null
+  signaturePresent: boolean
+  submittedAt: string | null
+  reviewedAt: string | null
+  reviewedById: string | null
+  reviewOwnerId: string | null
+  needsChangesReason: string
+  approvedAt: string | null
+  arrivalPendingAt: string | null
+  roomReadyAt: string | null
+  checkedInAt: string | null
+  cancelledAt: string | null
+  expiresAt: string
+  reservation: Reservation
+  stay: Stay
+  documents: ArrivalDocument[]
+  companions: ArrivalCompanion[]
+  paymentStep?: { required: boolean; status: string; capability: string }
+}
+
+export interface ArrivalAnalytics {
+  from: string
+  to: string
+  invitations: number
+  opened: number
+  started: number
+  submitted: number
+  approved: number
+  needsChanges: number
+  roomReady: number
+  checkedIn: number
+  technicalFailures: number
+  abandoned: number
+  completionRate: number
+  documentReworkRate: number
+  medianCompletionMillis: number
+  medianReviewMillis: number
+  stepEvents: Record<string, number>
+}
+
 export type ServiceCategory = 'housekeeping' | 'food_beverage' | 'transport' | 'wellness' | 'other'
 
 export interface Service {

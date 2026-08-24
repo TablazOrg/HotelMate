@@ -73,3 +73,20 @@ func TestLocalStorageRejectsTraversalTypeAndSize(t *testing.T) {
 		t.Fatalf("expected size rejection, got %v", err)
 	}
 }
+
+func TestLocalStorageRejectsActivePDFAndMalwareSignature(t *testing.T) {
+	storage, err := NewLocalStorage(t.TempDir(), 1024*1024)
+	if err != nil {
+		t.Fatalf("create storage: %v", err)
+	}
+	for name, body := range map[string][]byte{
+		"active.pdf": []byte("%PDF-1.7\\n1 0 obj <</OpenAction 2 0 R /JavaScript (alert)>>"),
+		"eicar.pdf":  []byte("%PDF-1.7\\nEICAR-STANDARD-ANTIVIRUS-TEST-FILE"),
+	} {
+		t.Run(name, func(t *testing.T) {
+			if _, err := storage.Save(context.Background(), uuid.New(), bytes.NewReader(body), name); !errors.Is(err, ErrUnsafeContent) {
+				t.Fatalf("unsafe document error = %v, want %v", err, ErrUnsafeContent)
+			}
+		})
+	}
+}

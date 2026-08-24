@@ -213,6 +213,51 @@ func (r *runner) run(ctx context.Context, result Result, stamp string) error {
 		return labeled("pre-arrival core-service denial", err)
 	}
 
+	if err := r.status(ctx, http.MethodPost, "/api/v1/staff/reservations/"+reservationID+"/check-in-invitations", adminToken, nil, map[string]any{"ttlHours": 24}, http.StatusForbidden); err != nil {
+		return labeled("arrival controls fail closed", err)
+	}
+	arrivalSteps := []map[string]any{
+		{"id": "details", "order": 1, "required": true, "title": "Guest and arrival details"},
+		{"id": "documents", "order": 2, "required": true, "title": "Evidence and consent"},
+		{"id": "review", "order": 3, "required": true, "title": "Review and submit"},
+	}
+	arrivalSettings, err := r.json(ctx, http.MethodPatch, "/api/v1/staff/arrival-settings", adminToken, nil, map[string]any{
+		"onlineCheckInEnabled": true, "digitalRegistrationEnabled": true, "paymentStepEnabled": false,
+		"invitationTtlHours": 24, "termsVersion": "acceptance-v1", "termsLocale": "en-US",
+		"termsText": "I confirm that the registration details are accurate and consent to hotel review.", "steps": arrivalSteps,
+	}, http.StatusOK)
+	if err != nil || !boolAt(arrivalSettings, "settings", "onlineCheckInEnabled") {
+		return labeled("arrival controls enablement", firstError(err, fmt.Errorf("arrival controls were not enabled")))
+	}
+	cancellationReservation, err := r.json(ctx, http.MethodPost, "/api/v1/staff/reservations", adminToken, nil, map[string]any{
+		"guest":  map[string]any{"firstName": "Cancel", "lastName": "Guest", "identityType": "passport", "identityNumber": "CANCEL-" + stamp, "phone": "+989120000001"},
+		"roomId": roomID, "arrivalDate": "2099-02-10", "departureDate": "2099-02-12",
+	}, http.StatusCreated)
+	if err != nil {
+		return labeled("cancellation reservation creation", err)
+	}
+	cancellationReservationID := stringAt(cancellationReservation, "reservation", "id")
+	if _, err := r.json(ctx, http.MethodPost, "/api/v1/staff/reservations/"+cancellationReservationID+"/confirm", adminToken, nil, nil, http.StatusOK); err != nil {
+		return labeled("cancellation reservation confirmation", err)
+	}
+	cancellationInvitation, err := r.json(ctx, http.MethodPost, "/api/v1/staff/reservations/"+cancellationReservationID+"/check-in-invitations", adminToken, nil, map[string]any{"ttlHours": 24}, http.StatusCreated)
+	if err != nil {
+		return labeled("cancellation invitation", err)
+	}
+	cancellationToken := stringAt(cancellationInvitation, "invitation", "invitationToken")
+	cancellationSession, err := r.json(ctx, http.MethodPost, "/api/v1/check-in/exchange", "", nil, map[string]any{"invitationToken": cancellationToken}, http.StatusOK)
+	if err != nil {
+		return labeled("cancellation invitation exchange", err)
+	}
+	cancellationGuestToken := stringAt(cancellationSession, "token")
+	cancelledArrival, err := r.json(ctx, http.MethodPost, "/api/v1/guest/arrival/cancel", cancellationGuestToken, nil, nil, http.StatusOK)
+	if err != nil || stringAt(cancelledArrival, "arrival", "status") != "cancelled" {
+		return labeled("arrival cancellation", firstError(err, fmt.Errorf("arrival was not cancelled")))
+	}
+	if err := r.status(ctx, http.MethodPost, "/api/v1/check-in/exchange", "", nil, map[string]any{"invitationToken": cancellationToken}, http.StatusConflict); err != nil {
+		return labeled("cancelled arrival replay denial", err)
+	}
+
 	document := []byte("%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n")
 	checkIn, err := r.multipart(ctx, "/api/v1/guest/online-check-in", guestToken, "identity.pdf", document, http.StatusCreated)
 	if err != nil {
@@ -271,6 +316,123 @@ func (r *runner) run(ctx context.Context, result Result, stamp string) error {
 		return labeled("service-request tenant isolation", err)
 	}
 
+	if err := r.status(ctx, http.MethodGet, "/api/v1/staff/arrivals", housekeepingToken, nil, nil, http.StatusForbidden); err != nil {
+		return labeled("arrival workspace role denial", err)
+	}
+	invitationResponse, err := r.json(ctx, http.MethodPost, "/api/v1/staff/reservations/"+reservationID+"/check-in-invitations", adminToken, nil, map[string]any{"ttlHours": 24}, http.StatusCreated)
+	if err != nil {
+		return labeled("signed arrival invitation", err)
+	}
+	invitationID := stringAt(invitationResponse, "invitation", "id")
+	invitationToken := stringAt(invitationResponse, "invitation", "invitationToken")
+	recoveryCode := stringAt(invitationResponse, "invitation", "recoveryCode")
+	if err := require("signed arrival invitation", invitationID != "" && invitationToken != "" && recoveryCode != "" && strings.HasPrefix(stringAt(invitationResponse, "invitation", "qrDataUrl"), "data:image/png;base64,")); err != nil {
+		return err
+	}
+	arrivalSession, err := r.json(ctx, http.MethodPost, "/api/v1/check-in/exchange", "", nil, map[string]any{"invitationToken": invitationToken}, http.StatusOK)
+	if err != nil {
+		return labeled("arrival invitation exchange", err)
+	}
+	arrivalGuestToken := stringAt(arrivalSession, "token")
+	arrivalID := stringAt(arrivalSession, "arrival", "id")
+	if err := require("arrival invitation exchange", arrivalGuestToken != "" && arrivalID != "" && stringAt(arrivalSession, "arrival", "status") == "draft" && stringAt(arrivalSession, "stay", "status") == "pre_arrival"); err != nil {
+		return err
+	}
+	arrivalDetails, err := r.json(ctx, http.MethodPatch, "/api/v1/guest/arrival/details", arrivalGuestToken, nil, map[string]any{
+		"contactPhone": "+989120000000", "contactEmail": "arrival@example.com", "nationality": "IR",
+		"arrivalEta": "2099-01-10T12:00:00Z", "arrivalMethod": "taxi", "transportDetails": "Acceptance taxi",
+		"accessibilityNeeds": "", "specialRequests": "Quiet room if available", "answers": map[string]any{"manualReview": true},
+	}, http.StatusOK)
+	if err != nil || numberAt(arrivalDetails, "arrival", "currentStep") < 2 {
+		return labeled("arrival details autosave", firstError(err, fmt.Errorf("arrival did not advance to evidence")))
+	}
+	companionsResponse, err := r.json(ctx, http.MethodPut, "/api/v1/guest/arrival/companions", arrivalGuestToken, nil, map[string]any{"companions": []map[string]any{{
+		"firstName": "Companion", "lastName": "Guest", "relationship": "family", "nationality": "IR", "dateOfBirth": "2010-01-01", "documentRequired": true,
+	}}}, http.StatusOK)
+	if err != nil {
+		return labeled("arrival companion manifest", err)
+	}
+	companionItems := sliceAt(companionsResponse, "arrival", "companions")
+	if err := require("arrival companion manifest", len(companionItems) == 1 && stringAt(asMap(companionItems[0]), "id") != ""); err != nil {
+		return err
+	}
+	companionID := stringAt(asMap(companionItems[0]), "id")
+	guestEvidence, err := r.multipartForm(ctx, "/api/v1/guest/arrival/documents", arrivalGuestToken, "document", "arrival-guest.pdf", "application/pdf", document, map[string]string{"evidenceType": "passport", "side": "single"}, http.StatusCreated)
+	if err != nil {
+		return labeled("arrival guest evidence", err)
+	}
+	guestEvidenceID := stringAt(guestEvidence, "document", "id")
+	if _, err := r.multipartForm(ctx, "/api/v1/guest/arrival/documents", arrivalGuestToken, "document", "arrival-companion.pdf", "application/pdf", document, map[string]string{"evidenceType": "identity", "side": "front", "companionId": companionID}, http.StatusCreated); err != nil {
+		return labeled("arrival companion evidence", err)
+	}
+	unsafePDF := []byte("%PDF-1.4\n1 0 obj\n<< /OpenAction 2 0 R /JavaScript (alert) >>\nendobj\n%%EOF\n")
+	if _, err := r.multipartForm(ctx, "/api/v1/guest/arrival/documents", arrivalGuestToken, "document", "unsafe.pdf", "application/pdf", unsafePDF, map[string]string{"evidenceType": "other", "side": "single"}, http.StatusUnprocessableEntity); err != nil {
+		return labeled("unsafe arrival evidence denial", err)
+	}
+	signaturePNG, _ := hex.DecodeString("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000d49444154789c6360f8cff00000040101005c0fe20000000049454e44ae426082")
+	signatureResponse, err := r.multipartForm(ctx, "/api/v1/guest/arrival/signature", arrivalGuestToken, "signature", "signature.png", "image/png", signaturePNG, map[string]string{
+		"signerName": "Acceptance Guest", "consent": "true", "termsVersion": "acceptance-v1", "locale": "en-US",
+	}, http.StatusOK)
+	if err != nil || !boolAt(signatureResponse, "arrival", "signaturePresent") {
+		return labeled("versioned arrival signature", firstError(err, fmt.Errorf("signature was not recorded")))
+	}
+	resumedArrival, err := r.json(ctx, http.MethodGet, "/api/v1/guest/arrival", arrivalGuestToken, nil, nil, http.StatusOK)
+	if err != nil || numberAt(resumedArrival, "arrival", "completenessScore") != 100 {
+		return labeled("resumable arrival journey", firstError(err, fmt.Errorf("arrival was not complete after resume")))
+	}
+	submitHeaders := map[string]string{"Idempotency-Key": "acceptance-submit-1"}
+	submittedArrival, err := r.json(ctx, http.MethodPost, "/api/v1/guest/arrival/submit", arrivalGuestToken, submitHeaders, nil, http.StatusOK)
+	if err != nil || stringAt(submittedArrival, "arrival", "status") != "submitted" {
+		return labeled("idempotent arrival submit", firstError(err, fmt.Errorf("arrival was not submitted")))
+	}
+	if replay, err := r.json(ctx, http.MethodPost, "/api/v1/guest/arrival/submit", arrivalGuestToken, submitHeaders, nil, http.StatusOK); err != nil || stringAt(replay, "arrival", "status") != "submitted" {
+		return labeled("arrival submit replay", firstError(err, fmt.Errorf("submit replay changed state")))
+	}
+	if err := r.status(ctx, http.MethodGet, "/api/v1/staff/arrivals/"+arrivalID+"/documents/"+guestEvidenceID, otherAdminToken, nil, nil, http.StatusNotFound); err != nil {
+		return labeled("arrival evidence tenant isolation", err)
+	}
+	changes, err := r.json(ctx, http.MethodPost, "/api/v1/staff/arrivals/"+arrivalID+"/review", adminToken, nil, map[string]any{"decision": "needs_changes", "reason": "Replace the primary identity image"}, http.StatusOK)
+	if err != nil || stringAt(changes, "arrival", "status") != "needs_changes" {
+		return labeled("reasoned arrival correction", firstError(err, fmt.Errorf("correction state was not returned")))
+	}
+	if err := r.status(ctx, http.MethodDelete, "/api/v1/guest/arrival/documents/"+guestEvidenceID, arrivalGuestToken, nil, nil, http.StatusNoContent); err != nil {
+		return labeled("arrival evidence correction delete", err)
+	}
+	if _, err := r.multipartForm(ctx, "/api/v1/guest/arrival/documents", arrivalGuestToken, "document", "arrival-guest-corrected.pdf", "application/pdf", document, map[string]string{"evidenceType": "passport", "side": "single"}, http.StatusCreated); err != nil {
+		return labeled("arrival evidence correction upload", err)
+	}
+	if _, err := r.multipartForm(ctx, "/api/v1/guest/arrival/signature", arrivalGuestToken, "signature", "signature-corrected.png", "image/png", signaturePNG, map[string]string{"signerName": "Acceptance Guest", "consent": "true", "termsVersion": "acceptance-v1", "locale": "en-US"}, http.StatusOK); err != nil {
+		return labeled("arrival signature correction", err)
+	}
+	resubmitted, err := r.json(ctx, http.MethodPost, "/api/v1/guest/arrival/submit", arrivalGuestToken, map[string]string{"Idempotency-Key": "acceptance-submit-2"}, nil, http.StatusOK)
+	if err != nil || stringAt(resubmitted, "arrival", "status") != "submitted" {
+		return labeled("arrival correction resubmit", firstError(err, fmt.Errorf("arrival was not resubmitted")))
+	}
+	approvedArrival, err := r.json(ctx, http.MethodPost, "/api/v1/staff/arrivals/"+arrivalID+"/review", adminToken, nil, map[string]any{"decision": "approve"}, http.StatusOK)
+	if err != nil || stringAt(approvedArrival, "arrival", "status") != "approved" {
+		return labeled("arrival approval", firstError(err, fmt.Errorf("arrival was not approved")))
+	}
+	if _, err := r.json(ctx, http.MethodPost, "/api/v1/staff/arrivals/"+arrivalID+"/status", adminToken, nil, map[string]any{"status": "arrival_pending"}, http.StatusOK); err != nil {
+		return labeled("arrival pending transition", err)
+	}
+	roomReadyArrival, err := r.json(ctx, http.MethodPost, "/api/v1/staff/arrivals/"+arrivalID+"/status", adminToken, nil, map[string]any{"status": "room_ready"}, http.StatusOK)
+	if err != nil || stringAt(roomReadyArrival, "arrival", "status") != "room_ready" {
+		return labeled("arrival room readiness", firstError(err, fmt.Errorf("room-ready state was not recorded")))
+	}
+	arrivalAnalytics, err := r.json(ctx, http.MethodGet, "/api/v1/staff/arrivals/analytics", adminToken, nil, nil, http.StatusOK)
+	if err != nil || numberAt(arrivalAnalytics, "analytics", "invitations") < 1 || numberAt(arrivalAnalytics, "analytics", "submitted") < 2 || numberAt(arrivalAnalytics, "analytics", "needsChanges") < 1 {
+		return labeled("arrival analytics funnel", firstError(err, fmt.Errorf("arrival funnel is incomplete")))
+	}
+	if err := r.status(ctx, http.MethodPost, "/api/v1/staff/check-in-invitations/"+invitationID+"/revoke", otherAdminToken, nil, nil, http.StatusNotFound); err != nil {
+		return labeled("arrival invitation tenant isolation", err)
+	}
+	if err := r.status(ctx, http.MethodPost, "/api/v1/staff/check-in-invitations/"+invitationID+"/revoke", adminToken, nil, nil, http.StatusNoContent); err != nil {
+		return labeled("arrival invitation revocation", err)
+	}
+	if err := r.status(ctx, http.MethodPost, "/api/v1/check-in/exchange", "", nil, map[string]any{"recoveryCode": recoveryCode}, http.StatusGone); err != nil {
+		return labeled("revoked arrival recovery denial", err)
+	}
+
 	review, err := r.json(ctx, http.MethodPost, "/api/v1/staff/online-check-ins/"+checkInID+"/review", adminToken, nil, map[string]any{"status": "approved", "note": "Acceptance review approved"}, http.StatusOK)
 	if err != nil {
 		return labeled("online check-in review", err)
@@ -295,6 +457,10 @@ func (r *runner) run(ctx context.Context, result Result, stamp string) error {
 	}
 	if err := require("staff check-in", stringAt(stayCheckIn, "stay", "status") == "active" && stringAt(stayCheckIn, "stay", "room", "status") == "occupied"); err != nil {
 		return err
+	}
+	checkedInArrival, err := r.json(ctx, http.MethodGet, "/api/v1/guest/arrival", arrivalGuestToken, nil, nil, http.StatusOK)
+	if err != nil || stringAt(checkedInArrival, "arrival", "status") != "checked_in" {
+		return labeled("arrival physical check-in replay", firstError(err, fmt.Errorf("arrival journey was not closed")))
 	}
 	activeLoginPayload := map[string]any{"hotelSlug": result.HotelSlug, "roomNumber": "A-101", "identityNumber": guestIdentity}
 	activeLogin, err := r.json(ctx, http.MethodPost, "/api/v1/auth/guest/login", "", nil, activeLoginPayload, http.StatusOK)
@@ -498,17 +664,26 @@ func (r *runner) bytes(ctx context.Context, method, path, token string, headers 
 }
 
 func (r *runner) multipart(ctx context.Context, path, token, filename string, document []byte, expected int) (map[string]any, error) {
+	return r.multipartForm(ctx, path, token, "document", filename, "application/pdf", document, nil, expected)
+}
+
+func (r *runner) multipartForm(ctx context.Context, path, token, fileField, filename, mediaType string, contents []byte, fields map[string]string, expected int) (map[string]any, error) {
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
 	header := make(textproto.MIMEHeader)
-	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="document"; filename="%s"`, filename))
-	header.Set("Content-Type", "application/pdf")
+	header.Set("Content-Disposition", fmt.Sprintf(`form-data; name="%s"; filename="%s"`, fileField, filename))
+	header.Set("Content-Type", mediaType)
 	part, err := writer.CreatePart(header)
 	if err != nil {
 		return nil, err
 	}
-	if _, err := part.Write(document); err != nil {
+	if _, err := part.Write(contents); err != nil {
 		return nil, err
+	}
+	for key, value := range fields {
+		if err := writer.WriteField(key, value); err != nil {
+			return nil, err
+		}
 	}
 	if err := writer.Close(); err != nil {
 		return nil, err

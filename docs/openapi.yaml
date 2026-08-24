@@ -1238,6 +1238,299 @@ paths:
         '101': { description: WebSocket connection established }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
+  /check-in/exchange:
+    post:
+      summary: Exchange one signed invitation or recovery code for a pre-arrival guest session
+      description: The capability is accepted only in the request body. Invitations are expiring, revocable, purpose-bound, and contain no guest identity.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+                - { type: object, required: [invitationToken], properties: { invitationToken: { type: string } } }
+                - { type: object, required: [recoveryCode], properties: { recoveryCode: { type: string } } }
+      responses:
+        '200': { description: Guest session and resumable journey, content: { application/json: { schema: { $ref: '#/components/schemas/ArrivalGuestSession' } } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '410': { description: Invitation expired or revoked }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/arrival:
+    get:
+      summary: Resume the guest arrival journey
+      security: [{ guestBearer: [] }]
+      responses:
+        '200':
+          description: Current journey and tenant controls
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [arrival, settings]
+                properties:
+                  arrival: { $ref: '#/components/schemas/ArrivalJourney' }
+                  settings: { $ref: '#/components/schemas/ArrivalSettings' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /guest/arrival/details:
+    patch:
+      summary: Autosave contact, arrival, accessibility, and special-request details
+      security: [{ guestBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ArrivalDetailsInput' } } } }
+      responses:
+        '200': { description: Saved journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/arrival/companions:
+    put:
+      summary: Replace the companion manifest before companion evidence is attached
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companions]
+              properties: { companions: { type: array, maxItems: 8, items: { $ref: '#/components/schemas/ArrivalCompanionInput' } } }
+      responses:
+        '200': { description: Updated journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/arrival/documents:
+    post:
+      summary: Add private image or PDF evidence for a guest or companion
+      description: MIME sniffing, size validation, active-PDF and malware-signature checks, hashing, and retention controls apply.
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [document, evidenceType, side]
+              properties:
+                document: { type: string, format: binary }
+                companionId: { type: string, format: uuid }
+                evidenceType: { type: string, enum: [identity, passport, visa, other] }
+                side: { type: string, enum: [single, front, back] }
+      responses:
+        '201': { description: Sanitized evidence metadata }
+        '413': { description: Evidence exceeds the configured limit }
+        '415': { description: Unsupported content type }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/arrival/documents/{id}:
+    delete:
+      summary: Delete private evidence from an editable journey
+      security: [{ guestBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '204': { description: Evidence deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /guest/arrival/signature:
+    post:
+      summary: Save consent and a signature bound to the current terms version
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [signature, signerName, consent, termsVersion, locale]
+              properties:
+                signature: { type: string, format: binary }
+                signerName: { type: string, maxLength: 180 }
+                consent: { type: boolean, const: true }
+                termsVersion: { type: string, maxLength: 64 }
+                locale: { type: string, maxLength: 12 }
+      responses:
+        '200': { description: Journey with current consent metadata }
+        '409': { description: Terms changed or journey is not editable }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /guest/arrival/submit:
+    post:
+      summary: Idempotently submit or resubmit a complete journey
+      security: [{ guestBearer: [] }]
+      parameters:
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, minLength: 8, maxLength: 128 } }
+      responses:
+        '200': { description: Submitted journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { description: Required details, evidence, current consent, or signature are incomplete }
+  /guest/arrival/cancel:
+    post:
+      summary: Cancel an editable online journey without blocking physical reception
+      security: [{ guestBearer: [] }]
+      responses:
+        '200': { description: Cancelled journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /guest/arrival/events:
+    post:
+      summary: Record a data-minimized step event
+      security: [{ guestBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, step, durationMs]
+              properties:
+                type: { type: string, enum: [start, save, error, abandon] }
+                step: { type: integer, minimum: 0, maximum: 3 }
+                durationMs: { type: integer, format: int64, minimum: 0 }
+      responses:
+        '204': { description: Event recorded without answers or evidence }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/arrival-settings:
+    get:
+      summary: Read tenant arrival rollout controls
+      security: [{ staffBearer: [] }]
+      responses:
+        '200': { description: Tenant arrival settings }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    patch:
+      summary: Update audited arrival controls and versioned terms
+      description: Primary and secondary administrators only. Exactly three configured steps are required and controls fail closed by default.
+      security: [{ staffBearer: [] }]
+      requestBody: { required: true, content: { application/json: { schema: { $ref: '#/components/schemas/ArrivalSettings' } } } }
+      responses:
+        '200': { description: Updated tenant controls }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/reservations/{id}/check-in-invitations:
+    post:
+      summary: Create a signed, expiring invitation and QR recovery artifact
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { ttlHours: { type: integer, minimum: 1, maximum: 720 } } }
+      responses:
+        '201': { description: One-time invitation capability, recovery code, and QR data URL }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/check-in-invitations/{id}/revoke:
+    post:
+      summary: Revoke an invitation immediately
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '204': { description: Invitation revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /staff/arrivals:
+    get:
+      summary: Filter the tenant arrival-readiness workspace
+      security: [{ staffBearer: [] }]
+      parameters:
+        - { name: status, in: query, schema: { $ref: '#/components/schemas/ArrivalStatus' } }
+        - { name: risk, in: query, schema: { type: string } }
+        - { name: ownerId, in: query, schema: { type: string, format: uuid } }
+        - { name: unassigned, in: query, schema: { type: boolean } }
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200': { description: Tenant-scoped readiness cards }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /staff/arrivals/analytics:
+    get:
+      summary: Read funnel, rework, failure, completion, and review metrics
+      security: [{ staffBearer: [] }]
+      parameters:
+        - { name: from, in: query, schema: { type: string, format: date-time } }
+        - { name: to, in: query, schema: { type: string, format: date-time } }
+      responses:
+        '200': { description: Data-minimized tenant funnel, content: { application/json: { schema: { type: object, properties: { analytics: { $ref: '#/components/schemas/ArrivalAnalytics' } } } } } }
+  /staff/arrivals/remind:
+    post:
+      summary: Queue audited reminders for multiple journeys
+      security: [{ staffBearer: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties: { ids: { type: array, maxItems: 100, items: { type: string, format: uuid } } }
+      responses:
+        '202': { description: Reminder intents recorded; channel delivery stays behind the M10 provider boundary }
+  /staff/arrivals/{id}/assign:
+    post:
+      summary: Take or assign review ownership
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        content:
+          application/json:
+            schema: { type: object, properties: { ownerId: { type: string, format: uuid } } }
+      responses:
+        '200': { description: Assigned journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /staff/arrivals/{id}/review:
+    post:
+      summary: Approve a journey or return it with a required reason
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [decision]
+              properties:
+                decision: { type: string, enum: [approve, needs_changes] }
+                reason: { type: string, maxLength: 1000 }
+      responses:
+        '200': { description: Reviewed journey }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+  /staff/arrivals/{id}/status:
+    post:
+      summary: Mark an approved journey arrival-pending or room-ready
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { type: object, required: [status], properties: { status: { type: string, enum: [arrival_pending, room_ready] } } }
+      responses:
+        '200': { description: Updated readiness state }
+        '409': { description: Invalid transition or room is not available }
+  /staff/arrivals/{id}/remind:
+    post:
+      summary: Record one audited reminder intent
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '202': { description: Reminder intent recorded }
+  /staff/arrivals/{id}/documents/{documentId}:
+    get:
+      summary: Download unexpired private arrival evidence
+      security: [{ staffBearer: [] }]
+      parameters:
+        - { $ref: '#/components/parameters/ResourceID' }
+        - { name: documentId, in: path, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200': { description: Private evidence bytes }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: Evidence retention ended }
+  /staff/arrivals/{id}/signature:
+    get:
+      summary: Download the unexpired registration signature
+      security: [{ staffBearer: [] }]
+      parameters: [{ $ref: '#/components/parameters/ResourceID' }]
+      responses:
+        '200': { description: Private signature bytes }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '410': { description: Signature retention ended }
 components:
   parameters:
     HotelSlug:
@@ -1262,6 +1555,151 @@ components:
       bearerFormat: JWT
       description: JWT with the hotelmate:guest audience and an active stay.
   schemas:
+    ArrivalStatus:
+      type: string
+      enum: [draft, submitted, needs_changes, approved, arrival_pending, room_ready, checked_in, expired, cancelled]
+    ArrivalSettings:
+      type: object
+      required: [onlineCheckInEnabled, digitalRegistrationEnabled, paymentStepEnabled, invitationTtlHours, termsVersion, termsLocale, termsText, steps]
+      properties:
+        onlineCheckInEnabled: { type: boolean, default: false }
+        digitalRegistrationEnabled: { type: boolean, default: false }
+        paymentStepEnabled: { type: boolean, default: false }
+        invitationTtlHours: { type: integer, minimum: 1, maximum: 720 }
+        termsVersion: { type: string, maxLength: 64 }
+        termsLocale: { type: string, minLength: 2, maxLength: 12 }
+        termsText: { type: string, minLength: 20, maxLength: 10000 }
+        documentPurpose: { type: string, readOnly: true }
+        steps:
+          type: array
+          minItems: 3
+          maxItems: 3
+          items:
+            type: object
+            required: [id, order, required, title]
+            properties:
+              id: { type: string, enum: [details, documents, review] }
+              order: { type: integer, minimum: 1, maximum: 3 }
+              required: { type: boolean }
+              title: { type: string }
+    ArrivalDetailsInput:
+      type: object
+      properties:
+        contactPhone: { type: string, maxLength: 40 }
+        contactEmail: { type: string, format: email, maxLength: 254 }
+        nationality: { type: string, maxLength: 80 }
+        arrivalEta: { type: [string, 'null'], format: date-time }
+        arrivalMethod: { type: string, enum: ['', car, taxi, flight, train, bus, walk, other] }
+        transportDetails: { type: string, maxLength: 500 }
+        accessibilityNeeds: { type: string, maxLength: 1000 }
+        specialRequests: { type: string, maxLength: 1000 }
+        answers: { type: object, additionalProperties: true }
+    ArrivalCompanionInput:
+      type: object
+      required: [firstName, lastName, documentRequired]
+      properties:
+        firstName: { type: string, minLength: 1, maxLength: 100 }
+        lastName: { type: string, minLength: 1, maxLength: 100 }
+        relationship: { type: string, maxLength: 64 }
+        nationality: { type: string, maxLength: 80 }
+        dateOfBirth: { type: [string, 'null'], format: date }
+        documentRequired: { type: boolean, default: true }
+    ArrivalCompanion:
+      allOf:
+        - $ref: '#/components/schemas/ArrivalCompanionInput'
+        - type: object
+          required: [id]
+          properties: { id: { type: string, format: uuid } }
+    ArrivalDocument:
+      type: object
+      required: [id, evidenceType, side, name, mediaType, size, verificationState, retentionUntil, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        companionId: { type: [string, 'null'], format: uuid }
+        evidenceType: { type: string, enum: [identity, passport, visa, other] }
+        side: { type: string, enum: [single, front, back] }
+        name: { type: string }
+        mediaType: { type: string, enum: [image/jpeg, image/png, application/pdf] }
+        size: { type: integer, format: int64 }
+        verificationState: { type: string, enum: [manual_review, verified, rejected] }
+        verificationNote: { type: string }
+        retentionUntil: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+    ArrivalPaymentStep:
+      type: object
+      required: [required, status, capability]
+      properties:
+        required: { type: boolean, const: false }
+        status: { type: string, enum: [not_required, provider_not_configured] }
+        capability: { type: string, const: deferred_to_m11 }
+    ArrivalJourney:
+      type: object
+      required: [id, status, currentStep, completenessScore, riskState, contactPhone, documents, companions, reservation, stay, expiresAt]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/ArrivalStatus' }
+        currentStep: { type: integer, minimum: 1, maximum: 3 }
+        completenessScore: { type: integer, minimum: 0, maximum: 100 }
+        riskState: { type: string, enum: [incomplete, manual_review, needs_changes, verified] }
+        contactPhone: { type: string }
+        contactEmail: { type: string }
+        nationality: { type: string }
+        arrivalEta: { type: [string, 'null'], format: date-time }
+        arrivalMethod: { type: string }
+        transportDetails: { type: string }
+        accessibilityNeeds: { type: string }
+        specialRequests: { type: string }
+        answers: { type: object, additionalProperties: true }
+        termsVersion: { type: string }
+        termsLocale: { type: string }
+        signerName: { type: string }
+        consentAt: { type: [string, 'null'], format: date-time }
+        signaturePresent: { type: boolean }
+        submittedAt: { type: [string, 'null'], format: date-time }
+        reviewedAt: { type: [string, 'null'], format: date-time }
+        reviewedById: { type: [string, 'null'], format: uuid }
+        reviewOwnerId: { type: [string, 'null'], format: uuid }
+        needsChangesReason: { type: string }
+        approvedAt: { type: [string, 'null'], format: date-time }
+        arrivalPendingAt: { type: [string, 'null'], format: date-time }
+        roomReadyAt: { type: [string, 'null'], format: date-time }
+        checkedInAt: { type: [string, 'null'], format: date-time }
+        cancelledAt: { type: [string, 'null'], format: date-time }
+        expiresAt: { type: string, format: date-time }
+        reservation: { $ref: '#/components/schemas/Reservation' }
+        stay: { $ref: '#/components/schemas/Stay' }
+        documents: { type: array, items: { $ref: '#/components/schemas/ArrivalDocument' } }
+        companions: { type: array, items: { $ref: '#/components/schemas/ArrivalCompanion' } }
+        paymentStep: { $ref: '#/components/schemas/ArrivalPaymentStep' }
+    ArrivalAnalytics:
+      type: object
+      required: [from, to, invitations, opened, started, submitted, approved, needsChanges, roomReady, checkedIn, technicalFailures, abandoned, completionRate, documentReworkRate, medianCompletionMillis, medianReviewMillis, stepEvents]
+      properties:
+        from: { type: string, format: date-time }
+        to: { type: string, format: date-time }
+        invitations: { type: integer, format: int64 }
+        opened: { type: integer, format: int64 }
+        started: { type: integer, format: int64 }
+        submitted: { type: integer, format: int64 }
+        approved: { type: integer, format: int64 }
+        needsChanges: { type: integer, format: int64 }
+        roomReady: { type: integer, format: int64 }
+        checkedIn: { type: integer, format: int64 }
+        technicalFailures: { type: integer, format: int64 }
+        abandoned: { type: integer, format: int64 }
+        completionRate: { type: number, format: double }
+        documentReworkRate: { type: number, format: double }
+        medianCompletionMillis: { type: integer, format: int64 }
+        medianReviewMillis: { type: integer, format: int64 }
+        stepEvents: { type: object, additionalProperties: { type: integer, format: int64 } }
+    ArrivalGuestSession:
+      allOf:
+        - $ref: '#/components/schemas/GuestSession'
+        - type: object
+          required: [arrival, settings]
+          properties:
+            arrival: { $ref: '#/components/schemas/ArrivalJourney' }
+            settings: { $ref: '#/components/schemas/ArrivalSettings' }
     Hotel:
       type: object
       required: [id, name, slug, logoUrl, primaryColor, timezone]
