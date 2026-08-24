@@ -26,6 +26,8 @@ All seven migrations, public/authenticated smoke, and the native stateful accept
 
 This staging deployment intentionally uses HTTP, controller-loaded immutable Linux/amd64 images, and a local-only recovery set. Private GHCR access was unavailable, so registry/signature gates were not bypassed; scheduled operations and the resource-heavy observability profile remain disabled until off-host storage and an approved alert receiver exist.
 
+[CI #26](https://github.com/TablazOrg/HotelMate/actions/runs/32654977500) passed all five gates for the exact deployed commit. The release job in [Release and deploy #8](https://github.com/TablazOrg/HotelMate/actions/runs/32655051216) published, scanned, SBOMed, signed, attested, and verified both images; its GitHub staging job then failed with SSH exit 255 because the repository environment still lacks deployment SSH configuration. Production was correctly skipped.
+
 ### Local verification evidence
 
 The sanitized evidence record is [M7 local validation — 2026-08-23](evidence/M7_LOCAL_VALIDATION_20260823.md). In summary:
@@ -45,7 +47,7 @@ These values prove the local command paths, validation, recovery selection, and 
 | M7 capability | Repository evidence | Current status |
 | --- | --- | --- |
 | Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script compatibility aliases, unit/failure-path tests | Implemented; local and external staging smoke/acceptance proven |
-| CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented and remotely proven by CI #21/release #5; branch and production-environment enforcement pending |
+| CI and supply chain | Pinned CI/release workflows, tests, scans, SBOMs, provenance, cosign verification, immutable release manifest | Implemented and remotely proven by CI #26/release #8; branch and production-environment enforcement pending |
 | Delivery and rollback | Digest policy, preflight, owner locks, migrations, checkpoint, activation, authenticated smoke, automatic/application rollback, timestamped evidence | External manual staging deployment/acceptance proven; signed automated promotion and production rollback pending |
 | Backup and restore | Strict coordinated manifests, checksums, PostgreSQL catalog checks, upload path safety, restic encryption/retention, metrics/timers | External staging local recovery set verified; approved off-host repository, schedule, and immutability pending |
 | Recovery rehearsal | Isolated-target guard, point-in-time set selection, restore, migrations, smoke, native acceptance, RPO/RTO evidence, monthly timer | Local drill passed; scheduled provider-backed drill and approved objectives pending |

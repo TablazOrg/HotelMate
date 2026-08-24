@@ -24,11 +24,11 @@ The Ansible baseline also installs bounded Docker JSON logs, protected configura
 
 ## Runtime deployment
 
-The first staging build used the pushed source base at commit `78d65303ba1bbc7b655ee1ee7b98c4fc13d7a3c4`. Private GHCR artifacts were not anonymously pullable, so the host did not bypass the Cosign gate or impersonate a signed promotion. Instead, source-identical Linux/amd64 images were built on the trusted controller, transferred over key-only SSH, and configured with `pull_policy=never` for this staging exercise only. Production retains `pull_policy=always` by default.
+The final staging API and operations CLI were built from pushed commit `1e70f05e5c5ef5f1c85eb48049c9bf750a18cd4b` with release identity `0.7.0-1e70f05e5c5e`. Private GHCR artifacts were not anonymously pullable, so the host did not bypass the Cosign gate or impersonate a signed promotion. Instead, source-identical Linux/amd64 artifacts were built on the trusted controller, transferred over key-only SSH, and configured with `pull_policy=never` for this staging exercise only. Production retains `pull_policy=always` by default.
 
 | Component | Runtime evidence |
 | --- | --- |
-| API | Healthy, unprivileged UID 100 with the operator group, immutable local image ID `sha256:5033db199d9d01d8a64bc03eee6fa2cef325f6d80a92e8675288bb7648889035` |
+| API | Healthy, unprivileged UID 100 with the operator group, immutable local image ID `sha256:a4d1f4d19e3f7e9df9df36ba6f2c7f6aa113d6a74d2aba21df81a85a9e97f7e9` |
 | Web edge | Running on public HTTP with immutable local image ID `sha256:2bb5940e1a637ede869f72a6712f347f4dd766239b0e3dfd80c0f7ce87f9a489` |
 | PostgreSQL | Healthy on pinned `postgres:16-alpine@sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777`; host port bound to `127.0.0.1` |
 | Schema | Seven migrations applied, zero pending |
@@ -40,11 +40,11 @@ The deployment exercise found and fixed a real cross-boundary issue: API-created
 
 | Check | Result |
 | --- | --- |
-| Authenticated smoke | Passed at `2026-08-23T16:41:24Z`: health, readiness, metadata, login, session, and operations report |
-| Stateful acceptance after permission fix | Passed at `2026-08-23T16:58:27Z`, including onboarding, RBAC, tenant isolation, lifecycle, ordering, private document integrity/access, AI handoff, fulfillment, reports/audits, checkout, and session expiry |
-| Recovery set | `hotelmate-20260823T165834Z` created and verified |
-| PostgreSQL dump | 82,132 bytes; SHA-256 `0b1126cece5799d3fd1bbaa44a7163715ffa3036c664333844a609e16421a92c` |
-| Private-upload archive | 373 bytes; SHA-256 `c512e6fe19be1b4d2fb39ef88d4fb24aa67753caa43f0a80b0f88255162d143f` |
+| Authenticated smoke | Passed at `2026-08-23T17:38:26Z`: health, readiness, metadata, login, session, and operations report |
+| Stateful acceptance after exact-commit deployment | Passed at `2026-08-23T17:38:33Z`, including onboarding, RBAC, tenant isolation, lifecycle, ordering, private document integrity/access, AI handoff, fulfillment, reports/audits, checkout, and session expiry |
+| Recovery set | `hotelmate-20260823T173844Z` created and verified |
+| PostgreSQL dump | 88,122 bytes; SHA-256 `b11a47044aafb62b56e584beb50e4b637a160c231e5afdeb68ade5b8844ae252` |
+| Private-upload archive | 453 bytes; SHA-256 `c7271db3dad6e91aebca50b829d7f6f1dddb4ed96fa873b5b4cce5bf91faad70` |
 | Recovery verification | Both hashes matched, `pg_restore` reported 162 catalog entries, and all seven migrations were present |
 
 The staging recovery set deliberately records `offHost: false`. It proves coordinated local creation and verification but is not durable against host/account loss and cannot satisfy the production backup gate.
@@ -52,6 +52,10 @@ The staging recovery set deliberately records `offHost: false`. It proves coordi
 ## Expected incomplete checks
 
 `hotelmate doctor` passed configuration, Docker, daemon, Cosign, disk headroom, database, target URL/DNS/connectivity, Compose, and release-manifest checks. Its two registry checks correctly failed because the release images require GHCR authorization and the staging exercise uses controller-loaded local image IDs. No signature, registry, or production backup guard was disabled.
+
+[CI #26](https://github.com/TablazOrg/HotelMate/actions/runs/32654977500) passed backend, frontend, repository-security, platform-configuration, and integrated-container jobs for the exact deployed commit.
+
+The release job in [Release and deploy #8](https://github.com/TablazOrg/HotelMate/actions/runs/32655051216) then built and published the exact-commit API/web images, passed high/critical scans, generated SPDX SBOMs and provenance, and signed and verified the images and attestations. Its downstream GitHub staging job failed in five seconds with SSH exit 255 because the repository's `staging` environment still has no deployment SSH configuration; production was correctly skipped. The separately authorized controller deployment documented above is therefore the staging runtime evidence.
 
 The following remain explicit M7 blockers:
 
