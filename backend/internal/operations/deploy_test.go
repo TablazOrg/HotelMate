@@ -60,6 +60,48 @@ func TestImmutableImageReferenceRequiresFullSHA256Digest(t *testing.T) {
 	}
 }
 
+func TestProductionBackupPolicyRequiresConfigurationOrExplicitDeferral(t *testing.T) {
+	if err := productionBackupPolicy(resolvedConfig{}); err == nil || !strings.Contains(err.Error(), "owner-approved deferral") {
+		t.Fatalf("missing production backup policy error = %v", err)
+	}
+	if err := productionBackupPolicy(resolvedConfig{OffHostDeferred: true}); err != nil {
+		t.Fatalf("explicit owner deferral rejected: %v", err)
+	}
+	configured := resolvedConfig{ResticRepository: "s3:example/bucket", ResticPassword: "secret"}
+	if err := productionBackupPolicy(configured); err != nil {
+		t.Fatalf("configured off-host backup rejected: %v", err)
+	}
+}
+
+func TestComposeArgumentsKeepManagedObservabilityInTheDeploymentProject(t *testing.T) {
+	directory := t.TempDir()
+	production := filepath.Join(directory, "docker-compose.production.yml")
+	observability := filepath.Join(directory, "docker-compose.observability.yml")
+	for _, path := range []string{production, observability} {
+		if err := os.WriteFile(path, []byte("services: {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	managed := strings.Join(composeArguments(resolvedConfig{
+		Environment: "production",
+		ComposeFile: production,
+		EvidenceDir: filepath.Join(directory, "evidence"),
+	}, "up", "-d", "--remove-orphans"), " ")
+	if !strings.Contains(managed, "-f "+production+" -f "+observability) {
+		t.Fatalf("managed compose arguments do not include observability: %s", managed)
+	}
+
+	development := strings.Join(composeArguments(resolvedConfig{
+		Environment: "development",
+		ComposeFile: production,
+		EvidenceDir: filepath.Join(directory, "evidence"),
+	}, "up", "-d"), " ")
+	if strings.Contains(development, observability) {
+		t.Fatalf("development unexpectedly includes managed observability: %s", development)
+	}
+}
+
 func TestEnvironmentLockRejectsLiveOwnerAndReleasesByToken(t *testing.T) {
 	directory := t.TempDir()
 	release, err := acquireEnvironmentLock(directory, "staging")

@@ -8,6 +8,8 @@ hotelmate_ssh_port: 22
 hotelmate_swap_size_mb: 2048
 hotelmate_metrics_retention: 30d
 hotelmate_alert_receiver_configured: false
+hotelmate_alert_receiver_deferred: false
+# hotelmate_alert_receiver_deferral_reason: Owner-approved temporary M7 closure exception; tracked for post-M7 remediation.
 hotelmate_recovery_drill_enabled: false
 hotelmate_manage_production_env: true
 hotelmate_scheduled_operations_enabled: true
@@ -41,6 +43,7 @@ hotelmate_production_env: |
   ALLOWED_ORIGINS=https://{{ hotelmate_domain }}
   RESTIC_REPOSITORY={{ vault_restic_repository }}
   RESTIC_PASSWORD={{ vault_restic_password }}
+  HOTELMATE_OWNER_APPROVED_OFFHOST_BACKUP_DEFERRAL=false
   GRAFANA_ADMIN_USER={{ vault_grafana_admin_user }}
   GRAFANA_ADMIN_PASSWORD={{ vault_grafana_admin_password }}
   COSIGN_CERTIFICATE_IDENTITY=https://github.com/TablazOrg/HotelMate/.github/workflows/release.yml@refs/heads/main

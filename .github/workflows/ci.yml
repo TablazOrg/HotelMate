@@ -107,6 +107,8 @@ jobs:
       - name: Validate the host configuration playbook
         run: ansible-playbook --syntax-check -i inventory.example.yml playbook.yml
         working-directory: infra/ansible
+      - name: Validate the certificate-renewal deployment hook
+        run: sh -n ops/certbot/hotelmate-nginx-reload
       - name: Validate production and observability Compose
         env:
           APP_ENV: production

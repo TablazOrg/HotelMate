@@ -39,6 +39,7 @@ type resolvedConfig struct {
 	PostgresDriver   string
 	CosignIdentity   string
 	CosignIssuer     string
+	OffHostDeferred  bool
 	RecoveryDrill    bool
 	RecoveryPoint    string
 	DrillOperator    string
@@ -133,6 +134,7 @@ func (a *App) resolveConfig(options cliOptions) (resolvedConfig, error) {
 		return resolvedConfig{}, err
 	}
 	recoveryDrill, _ := strconv.ParseBool(lookup("HOTELMATE_ISOLATED_RECOVERY_DRILL"))
+	offHostDeferred, _ := strconv.ParseBool(lookup("HOTELMATE_OWNER_APPROVED_OFFHOST_BACKUP_DEFERRAL"))
 	resolved := resolvedConfig{
 		Environment: environment, DatabaseURL: lookup("DATABASE_URL"), UploadsDir: firstValue(lookup("UPLOADS_DIR"), "uploads"),
 		BackupDir:    firstValue(lookup("HOTELMATE_BACKUP_DIR"), filepath.Join(a.WorkingDir, ".hotelmate", "backups")),
@@ -143,16 +145,17 @@ func (a *App) resolveConfig(options cliOptions) (resolvedConfig, error) {
 		EvidenceDir:  firstValue(lookup("HOTELMATE_EVIDENCE_DIR"), filepath.Join(a.WorkingDir, ".hotelmate", "evidence")),
 		ManifestFile: lookup("HOTELMATE_BACKUP_MANIFEST"), ResticRepository: lookup("RESTIC_REPOSITORY"),
 		ResticPassword: lookup("RESTIC_PASSWORD"), ResticKeepDaily: keepDaily, ResticKeepWeekly: keepWeekly, MinDiskBytes: minDisk,
-		TextfileDir:    lookup("HOTELMATE_TEXTFILE_DIR"),
-		PostgresDriver: firstValue(lookup("HOTELMATE_POSTGRES_DRIVER"), "direct"),
-		CosignIdentity: lookup("COSIGN_CERTIFICATE_IDENTITY"),
-		CosignIssuer:   firstValue(lookup("COSIGN_CERTIFICATE_OIDC_ISSUER"), "https://token.actions.githubusercontent.com"),
-		RecoveryDrill:  recoveryDrill,
-		RecoveryPoint:  lookup("HOTELMATE_RECOVERY_POINT"),
-		DrillOperator:  firstValue(lookup("HOTELMATE_OPERATOR"), lookup("USER"), "unknown"),
-		DrillMaxRPO:    maxRPO,
-		DrillMaxRTO:    maxRTO,
-		lookup:         lookup,
+		TextfileDir:     lookup("HOTELMATE_TEXTFILE_DIR"),
+		PostgresDriver:  firstValue(lookup("HOTELMATE_POSTGRES_DRIVER"), "direct"),
+		CosignIdentity:  lookup("COSIGN_CERTIFICATE_IDENTITY"),
+		CosignIssuer:    firstValue(lookup("COSIGN_CERTIFICATE_OIDC_ISSUER"), "https://token.actions.githubusercontent.com"),
+		OffHostDeferred: offHostDeferred,
+		RecoveryDrill:   recoveryDrill,
+		RecoveryPoint:   lookup("HOTELMATE_RECOVERY_POINT"),
+		DrillOperator:   firstValue(lookup("HOTELMATE_OPERATOR"), lookup("USER"), "unknown"),
+		DrillMaxRPO:     maxRPO,
+		DrillMaxRTO:     maxRTO,
+		lookup:          lookup,
 	}
 	resolved.Application = appconfig.LoadFrom(func(key string) string {
 		if key == "APP_ENV" {
@@ -206,7 +209,8 @@ func (a *App) validateConfig(config resolvedConfig) (any, error) {
 	return map[string]any{
 		"environment": config.Environment, "databaseConfigured": config.DatabaseURL != "", "uploadsDir": config.UploadsDir,
 		"backupDir": config.BackupDir, "baseURL": config.BaseURL, "offHostBackupConfigured": config.ResticRepository != "",
-		"secretsRedacted": true,
+		"offHostBackupOwnerDeferred": config.OffHostDeferred,
+		"secretsRedacted":            true,
 	}, nil
 }
 

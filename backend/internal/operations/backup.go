@@ -168,7 +168,7 @@ func (a *App) createBackup(ctx context.Context, config resolvedConfig) (any, err
 	}
 	manifest := recoverySet{
 		SchemaVersion: recoverySchemaVersion, ID: id, CreatedAt: createdAt, Environment: config.Environment,
-		ReleaseVersion: config.Application.APIVersion, Database: databaseArtifact, Uploads: uploadsArtifact, Migrations: migrations,
+		ReleaseVersion: recoveryReleaseVersion(config), Database: databaseArtifact, Uploads: uploadsArtifact, Migrations: migrations,
 	}
 	manifestPath := filepath.Join(config.BackupDir, id+".json")
 	manifest.ManifestFile = manifestPath
@@ -193,6 +193,13 @@ func (a *App) createBackup(ctx context.Context, config resolvedConfig) (any, err
 		}
 	}
 	return map[string]any{"manifest": manifestPath, "recoverySet": manifest, "verified": true}, nil
+}
+
+func recoveryReleaseVersion(config resolvedConfig) string {
+	if release, err := currentRelease(config.EvidenceDir, config.Environment); err == nil {
+		return release.ReleaseVersion
+	}
+	return config.Application.APIVersion
 }
 
 func (a *App) sendRecoverySetOffHost(ctx context.Context, config resolvedConfig, manifest recoverySet) (string, error) {
