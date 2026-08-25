@@ -358,6 +358,22 @@
         - hotelmate-recovery-drill.timer
       notify: Reload systemd
 
+    - name: Install the Certbot deployment-hook directory
+      ansible.builtin.file:
+        path: /etc/letsencrypt/renewal-hooks/deploy
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Reload the edge after a successful certificate renewal
+      ansible.builtin.copy:
+        src: "{{ hotelmate_source_root }}/ops/certbot/hotelmate-nginx-reload"
+        dest: /etc/letsencrypt/renewal-hooks/deploy/hotelmate-nginx-reload
+        owner: root
+        group: root
+        mode: "0755"
+
     - name: Enable scheduled backup and privacy-retention jobs
       ansible.builtin.systemd_service:
         name: "{{ item }}"

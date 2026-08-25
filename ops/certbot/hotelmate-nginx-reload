@@ -1,0 +1,27 @@
+#!/bin/sh
+set -eu
+
+container_ids=$(
+  /usr/bin/docker ps \
+    --filter 'label=com.docker.compose.project=hotelmate' \
+    --filter 'label=com.docker.compose.service=web' \
+    --format '{{.ID}}'
+)
+
+# A renewal must reload exactly one running edge container. Failing closed
+# leaves the renewed certificate on disk and makes the operator investigate.
+set -- $container_ids
+if [ "$#" -ne 1 ]; then
+  echo "expected exactly one running HotelMate web container; found $#" >&2
+  exit 1
+fi
+
+if ! output=$(/usr/bin/docker exec "$1" nginx -t 2>&1); then
+  printf '%s\n' "$output" >&2
+  exit 1
+fi
+
+if ! output=$(/usr/bin/docker exec "$1" nginx -s reload 2>&1); then
+  printf '%s\n' "$output" >&2
+  exit 1
+fi
