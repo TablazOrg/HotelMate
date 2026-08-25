@@ -13,7 +13,7 @@ M7 requires external commercial, legal, recovery, access, and ownership choices 
 | Decision | Required owner value | Current repository behavior |
 | --- | --- | --- |
 | Provider, region, residency, budget, account owner | Pending | An operator-supplied Ubuntu VPS is validated as staging only; provider/account/residency approval remains absent |
-| Staging/production domains, DNS, certificate owner, IPv6 | Pending | TLS Compose and external probe require supplied domains/certificates |
+| Staging/production domains, DNS, certificate owner, IPv6 | Staging resolved: `hotelmate.ir`, WebRamz authoritative DNS, Let's Encrypt for root/`www`, IPv4 only | Trusted HTTPS, HSTS, webroot renewal, timer, reload hook, and external probe are proven in staging; production classification/IPv6 remain owner decisions |
 | Availability, volume, maintenance, scaling trigger | Pending | Proposed SLO only; one API replica remains enforced by architecture |
 | RPO, RTO, retention, legal hold, document recovery | Pending | Daily logical recovery set and 14 daily/8 weekly restic proposal; not approved |
 | Environments, promotions, hotfix, approvers | Pending | GitHub `staging` then protected `production`; environment reviewers must be configured |
@@ -30,4 +30,4 @@ M7 requires external commercial, legal, recovery, access, and ownership choices 
 
 ## Consequences
 
-M7 implementation can be built, tested, deployed, rolled back, and restored locally. The supplied VPS now also proves external Ansible convergence, reboot persistence, HTTP staging availability, authenticated acceptance, and coordinated on-host recovery-set verification. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are implementation evidence rather than approved production objectives. Signed registry-based staging/production promotion, successful encrypted off-host transfer, a scheduled provider-backed drill against approved RPO/RTO, tested paging, DNS/TLS renewal, and replacement-host rebuild evidence remain acceptance blockers until this ADR is approved and the required resources are available.
+M7 implementation can be built, tested, deployed, rolled back, and restored locally. The supplied VPS now also proves external Ansible convergence, reboot persistence, trusted HTTPS staging availability, authenticated acceptance, coordinated on-host recovery-set verification, and simulated certificate renewal with validated edge reload. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are implementation evidence rather than approved production objectives. Signed registry-based staging/production promotion, successful encrypted off-host transfer, a scheduled provider-backed drill against approved RPO/RTO, tested paging, and replacement-host rebuild evidence remain acceptance blockers until this ADR is approved and the required resources are available.

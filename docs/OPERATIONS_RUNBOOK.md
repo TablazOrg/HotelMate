@@ -33,7 +33,7 @@ For database corruption or accidental deletion, freeze writes, preserve forensic
 
 ## Certificate, credential, and image incidents
 
-- Certificate expiry: remove the host from traffic if TLS is invalid, renew using the approved ACME owner, verify the full chain and external probe, then restore traffic. Do not disable HTTPS/HSTS as a workaround.
+- Certificate expiry: remove the host from traffic if TLS is invalid, renew using the approved ACME owner, verify the full chain and external probe, then restore traffic. The normal path is `certbot renew`; the installed deploy hook validates and reloads the running edge. Exercise it safely with `certbot renew --dry-run --run-deploy-hooks`. Do not disable HTTPS/HSTS as a workaround.
 - Compromised deploy/SSH credential: revoke it, remove authorized access, rotate dependent secrets, review audit/GitHub/SSH logs, rebuild the host if integrity is uncertain, and complete the access review.
 - Compromised application secret: rotate JWT/onboarding/database/restic credentials in the secrets manager and environment, invalidate active sessions where applicable, deploy, and verify.
 - Compromised image: block the digest in the registry, roll back to a verified manifest, preserve artifacts for investigation, rebuild from a reviewed commit, reissue SBOM/provenance/signature, and promote normally.

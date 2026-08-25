@@ -22,7 +22,19 @@ ansible-playbook -i inventory.yml playbook.yml --ask-vault-pass \
   -e hotelmate_cosign_sha256=<trusted-cosign-sha256>
 ```
 
-The playbook verifies both controller-side artifacts before transfer, then creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic/Buildx tooling, optional managed swap, Docker JSON-log rotation, certbot renewal, protected runtime directories/config, and systemd backup/privacy-retention timers. It resolves the operator GID and shares private uploads only between that group and the unprivileged API UID; `HOTELMATE_API_UID` and `HOTELMATE_OPERATOR_GID` are rendered into the protected environment. The optional monthly recovery-drill timer remains disabled until a dedicated Vault-protected non-production environment is supplied. Production intentionally refuses to configure while the alert receiver is unapproved.
+The playbook verifies both controller-side artifacts before transfer, then creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic/Buildx tooling, optional managed swap, Docker JSON-log rotation, Certbot renewal and its fail-closed Nginx reload hook, protected runtime directories/config, and systemd backup/privacy-retention timers. It resolves the operator GID and shares private uploads only between that group and the unprivileged API UID; `HOTELMATE_API_UID` and `HOTELMATE_OPERATOR_GID` are rendered into the protected environment. The optional monthly recovery-drill timer remains disabled until a dedicated Vault-protected non-production environment is supplied. Production intentionally refuses to configure while the alert receiver is unapproved.
+
+After the first certificate is issued, configure Certbot to use the Compose webroot rather than retaining the standalone authenticator, then prove renewal and the installed deploy hook:
+
+```bash
+sudo certbot reconfigure --cert-name <domain> --webroot \
+  --webroot-path /var/lib/docker/volumes/hotelmate_certbot-webroot/_data \
+  --non-interactive
+sudo certbot renew --cert-name <domain> --dry-run --run-deploy-hooks \
+  --non-interactive
+```
+
+The renewal hook validates the running edge configuration and reloads exactly one `hotelmate` Compose web container. It fails closed if that invariant is not met.
 
 Copy reviewed runtime files to `/srv/hotelmate`, including production and observability Compose files, `ops/observability`, and the frontend Nginx template as packaged by the release process. `docker-compose.production.yml` requires `HOTELMATE_API_IMAGE`, `HOTELMATE_WEB_IMAGE`, and `HOTELMATE_OPERATOR_GID`; the CLI writes release image digests from the manifest into a mode-`600` managed file. `HOTELMATE_PULL_POLICY` defaults to `always`; `never` is reserved for an explicitly documented non-production controller-loaded image exercise and is not a production signature bypass.
 
