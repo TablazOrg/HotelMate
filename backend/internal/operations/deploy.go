@@ -159,11 +159,7 @@ func (a *App) deployPreflight(ctx context.Context, config resolvedConfig, releas
 		}
 	}
 	if config.Environment == "production" {
-		if config.ResticRepository == "" || config.ResticPassword == "" {
-			add("off-host-backup", fmt.Errorf("RESTIC_REPOSITORY and RESTIC_PASSWORD are required"), "")
-		} else {
-			add("off-host-backup", nil, "configured")
-		}
+		add("off-host-backup", productionBackupPolicy(config), productionBackupPolicySuccess(config))
 	}
 	var composeDiagnostic bytes.Buffer
 	env := releaseEnvironment(release)
@@ -208,6 +204,23 @@ func (a *App) deployPreflight(ctx context.Context, config resolvedConfig, releas
 		return data, failure(ExitPrecondition, fmt.Sprintf("deployment preflight found %d failed checks", failed), nil)
 	}
 	return data, nil
+}
+
+func productionBackupPolicy(config resolvedConfig) error {
+	if config.ResticRepository != "" && config.ResticPassword != "" {
+		return nil
+	}
+	if config.OffHostDeferred {
+		return nil
+	}
+	return fmt.Errorf("RESTIC_REPOSITORY and RESTIC_PASSWORD are required unless the owner-approved deferral is recorded")
+}
+
+func productionBackupPolicySuccess(config resolvedConfig) string {
+	if config.ResticRepository != "" && config.ResticPassword != "" {
+		return "configured"
+	}
+	return "owner-approved deferral recorded; local recovery checkpoint remains mandatory"
 }
 
 func (a *App) applyRelease(ctx context.Context, config resolvedConfig, release releaseManifest) (any, error) {

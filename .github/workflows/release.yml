@@ -189,6 +189,9 @@ jobs:
     needs: release
     runs-on: ubuntu-latest
     environment: staging
+    permissions:
+      contents: read
+      packages: read
     concurrency:
       group: hotelmate-staging
       cancel-in-progress: false
@@ -217,7 +220,15 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
           CONFIG_FILE: ${{ vars.CONFIG_FILE }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cleanup() {
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker logout ghcr.io >/dev/null 2>&1 || true'
+          }
+          trap cleanup EXIT
+          printf '%s' "$GHCR_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"
@@ -241,6 +252,9 @@ jobs:
     needs: [release, staging]
     runs-on: ubuntu-latest
     environment: production
+    permissions:
+      contents: read
+      packages: read
     concurrency:
       group: hotelmate-production
       cancel-in-progress: false
@@ -269,7 +283,15 @@ jobs:
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           DEPLOY_PATH: ${{ vars.DEPLOY_PATH }}
           CONFIG_FILE: ${{ vars.CONFIG_FILE }}
+          GHCR_USERNAME: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          cleanup() {
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker logout ghcr.io >/dev/null 2>&1 || true'
+          }
+          trap cleanup EXIT
+          printf '%s' "$GHCR_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "docker login ghcr.io --username '$GHCR_USERNAME' --password-stdin"
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/incoming'"

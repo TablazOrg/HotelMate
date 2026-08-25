@@ -60,6 +60,19 @@ func TestImmutableImageReferenceRequiresFullSHA256Digest(t *testing.T) {
 	}
 }
 
+func TestProductionBackupPolicyRequiresConfigurationOrExplicitDeferral(t *testing.T) {
+	if err := productionBackupPolicy(resolvedConfig{}); err == nil || !strings.Contains(err.Error(), "owner-approved deferral") {
+		t.Fatalf("missing production backup policy error = %v", err)
+	}
+	if err := productionBackupPolicy(resolvedConfig{OffHostDeferred: true}); err != nil {
+		t.Fatalf("explicit owner deferral rejected: %v", err)
+	}
+	configured := resolvedConfig{ResticRepository: "s3:example/bucket", ResticPassword: "secret"}
+	if err := productionBackupPolicy(configured); err != nil {
+		t.Fatalf("configured off-host backup rejected: %v", err)
+	}
+}
+
 func TestEnvironmentLockRejectsLiveOwnerAndReleasesByToken(t *testing.T) {
 	directory := t.TempDir()
 	release, err := acquireEnvironmentLock(directory, "staging")

@@ -8,8 +8,12 @@
     - name: Refuse an unapproved alert receiver in production
       ansible.builtin.assert:
         that:
-          - hotelmate_environment != 'production' or (hotelmate_alert_receiver_configured | bool and hotelmate_alertmanager_config is defined)
-        fail_msg: Production requires an approved Alertmanager receiver and escalation owner.
+          - >-
+            hotelmate_environment != 'production' or
+            (hotelmate_alert_receiver_configured | bool and hotelmate_alertmanager_config is defined) or
+            (hotelmate_alert_receiver_deferred | default(false) | bool and
+             hotelmate_alert_receiver_deferral_reason | default('') | length > 0)
+        fail_msg: Production requires an approved Alertmanager receiver or an explicit owner-approved deferral reason.
 
     - name: Require a dedicated recovery-drill configuration when scheduling drills
       ansible.builtin.assert:
