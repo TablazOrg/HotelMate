@@ -21,27 +21,27 @@ These are documented risk acceptances, not completed controls. Production prefli
 
 The sanitized production record is [M7 production validation — 2026-08-25](evidence/M7_PRODUCTION_VALIDATION_20260825.md). The historical [external staging](evidence/M7_STAGING_VALIDATION_20260823.md) and [local validation](evidence/M7_LOCAL_VALIDATION_20260823.md) records retain the earlier bootstrap, recovery-drill, and distinct-image rollback evidence.
 
-[CI run 32844808717](https://github.com/TablazOrg/HotelMate/actions/runs/32844808717) passed all five gates for commit `884b7e7d7e22ca27796f69a3bc24af300c7d2125`. [Release and deploy run 32844917487](https://github.com/TablazOrg/HotelMate/actions/runs/32844917487) then built once, scanned, generated SPDX SBOMs/provenance, keylessly signed and verified both images/attestations, deployed the exact digests to protected staging, passed stateful acceptance/authenticated smoke, received production approval, and promoted the same manifest.
+[CI run 32857623164](https://github.com/TablazOrg/HotelMate/actions/runs/32857623164) passed all five gates for commit `e13acc62d0b5bb818c5d2a01963451a6a1869e80`. [Release and deploy run 32857767399](https://github.com/TablazOrg/HotelMate/actions/runs/32857767399) then built once, scanned, generated SPDX SBOMs/provenance, keylessly signed and verified both images/attestations, deployed the exact digests to protected staging, passed stateful acceptance/authenticated smoke, received production approval, and promoted the same manifest.
 
 The accepted production digests are:
 
-- API: `ghcr.io/tablazorg/hotelmate/api@sha256:f807aba2f40556dbecb23951acf12f00caf930033153a8df19ee28386c754be6`
-- Web: `ghcr.io/tablazorg/hotelmate/web@sha256:d40622279cc3280cbeb342ac2c3d4d3ac20214ccf77986c6a948bc9a4fffd751`
+- API: `ghcr.io/tablazorg/hotelmate/api@sha256:bf14969a122467e488d301956926f6e8742ba82018baf2d4e8b8d0ed8baa6e1b`
+- Web: `ghcr.io/tablazorg/hotelmate/web@sha256:bbeb49b6fc33f237b4845a4c211ad591e20c10fd10baac4dd9d1103c4e5e7aab`
 
-Production deployment evidence reports `status=succeeded` from `2026-08-25T12:09:57Z` through `12:11:29Z`, including a verified local recovery checkpoint, eight migrations, readiness, and public/authenticated smoke. An independent smoke passed again at `12:36:21Z`.
+Production deployment evidence reports `status=succeeded` from `2026-08-25T14:19:42Z` through `14:22:13Z`, including a verified local recovery checkpoint, eight migrations, readiness, and public/authenticated smoke. Independent release, runtime, checksum, backup, and monitoring checks passed again through `14:38Z`.
 
-The production host is Ansible-managed and converged with a repeat `ok=40 changed=0 failed=0` pass. Key-only non-root SSH, default-deny firewalling, private PostgreSQL/monitoring ports, unattended updates, fail2ban, time sync, bounded Docker logs, 2 GiB swap, DNS, trusted root/`www` TLS, HSTS/security headers, webroot renewal, and the Nginx deploy hook are active.
+The production host is Ansible-managed and converged from the final release inputs with a repeat `ok=39 changed=0 failed=0` pass. Key-only non-root SSH, default-deny firewalling, private PostgreSQL/monitoring ports, unattended updates, fail2ban, time sync, bounded Docker logs, 2 GiB swap, DNS, trusted root/`www` TLS, HSTS/security headers, webroot renewal, and the Nginx deploy hook are active.
 
-Recovery set `hotelmate-20260825T123740Z` was created by the hardened systemd timer path and independently verified: a 134,488-byte PostgreSQL custom dump with 229 catalog entries, an 836-byte private-upload archive, eight migrations, and matching SHA-256 hashes. It records `offHost:false` under the approved exception. Daily backup and both privacy-purge timers are enabled and their manual service exercises passed. The isolated local drill measured RPO 268 seconds and RTO 4 seconds; the provider-backed drill timer remains disabled until the off-host exception is remediated.
+Recovery set `hotelmate-20260825T143658Z` was created by the hardened systemd path for release `0.7.0-e13acc62d0b5` and independently verified: a 165,899-byte PostgreSQL custom dump with 229 catalog entries, a 1,417-byte private-upload archive, eight migrations, and matching SHA-256 hashes. It records `offHost:false` under the approved exception. Daily backup and both privacy-purge timers are enabled and their manual service exercises passed. The isolated local drill measured RPO 268 seconds and RTO 4 seconds; the provider-backed drill timer remains disabled until the off-host exception is remediated.
 
-The private monitoring profile is running in production. Prometheus reported all six targets up, loaded 24 alert rules, and had zero firing rules at capture; Grafana, Loki, Alloy, Alertmanager, host/container/PostgreSQL exporters, and the external HTTPS probe were ready. Prometheus/Grafana/Alertmanager bind to loopback. Alertmanager intentionally retains a local no-op receiver under the approved alert-delivery exception.
+The private monitoring profile is running in production. Prometheus reported all six targets up—including the external probe against `https://hotelmate.ir`—and loaded 24 alert rules. No unexpected rule is active; `HotelMateRestoreDrillStale` intentionally remains firing because the owner-approved off-host/provider-isolated drill control is deferred. Grafana, Loki, Alloy, Alertmanager, and the host/container/PostgreSQL exporters were ready. Prometheus/Grafana/Alertmanager bind to loopback. Alertmanager intentionally retains a local no-op receiver under the approved alert-delivery exception.
 
 ### Requirement and acceptance evidence matrix
 
 | M7 capability | Repository evidence | Accepted status |
 | --- | --- | --- |
 | Single operations contract | `backend/cmd/hotelmate`, reusable `internal/operations` and `internal/acceptance`, thin Make/script aliases, unit/failure-path tests | Complete; local, staging, and production JSON/smoke paths proven |
-| CI and supply chain | Pinned CI/release workflows, scans, SBOMs, provenance, Cosign verification, immutable manifest | Complete; CI 32844808717 and release 32844917487 passed |
+| CI and supply chain | Pinned CI/release workflows, scans, SBOMs, provenance, Cosign verification, immutable manifest | Complete; CI 32857623164 and release 32857767399 passed |
 | Delivery and rollback | Digest preflight, locks, migrations, checkpoint, activation, smoke, automatic/application rollback, evidence | Complete; protected signed staging-to-production promotion passed; distinct-image rollback/redeploy and failure paths are proven |
 | Backup and restore | Coordinated manifests, checksums, catalog checks, upload safety, restic/retention interface, metrics/timers | Complete under exception; production local schedule/verification passed, off-host copy deferred |
 | Recovery rehearsal | Isolated-target guard, point-in-time selection, restore, migrations, smoke, acceptance, measured RPO/RTO | Complete for implemented local path; provider-isolated scheduled drill follows the off-host remediation |
