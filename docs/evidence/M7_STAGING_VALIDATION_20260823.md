@@ -2,6 +2,8 @@
 
 This is a sanitized record of the deployment to the operator-supplied VPS. The host address, SSH key material, generated application/database credentials, protected environment, raw private documents, and unrestricted logs are intentionally excluded. Raw JSON evidence and recovery artifacts remain mode-restricted on the host.
 
+> Historical record: this document captures the pre-promotion staging state. The protected production promotion completed on 2026-08-25, and [the production validation record](M7_PRODUCTION_VALIDATION_20260825.md) supersedes the classification and blocker statements below. They remain here only to preserve the evidence available at the time.
+
 ## Scope and classification
 
 The supplied host remains classified as **staging**, not production. The operator subsequently supplied `hotelmate.ir`, WebRamz DNS, and an ACME contact. The root and `www` records now resolve to the host, trusted HTTPS and HSTS are enabled, and renewal is tested. GHCR pull authorization, an off-host restic repository, production approver, recovery objectives, secrets backend, and paging receiver remain unavailable; observability and scheduled jobs that depend on those decisions remain disabled.
@@ -72,7 +74,7 @@ The release job in [Release and deploy #8](https://github.com/TablazOrg/HotelMat
 
 [CI #30](https://github.com/TablazOrg/HotelMate/actions/runs/32834547422) passed all five gates for certificate-renewal automation commit `b7abcb5395917a8c9047c5ac0bd13fe58161b20c`. The release job in [Release and deploy #11](https://github.com/TablazOrg/HotelMate/actions/runs/32834669747) published and verified the artifacts, then stopped at the same missing GitHub staging SSH configuration; production was correctly skipped.
 
-The following remain explicit M7 blockers:
+At the time of this staging capture, the following remained explicit M7 blockers:
 
 - registry authorization followed by Cosign-verified signed-image deployment through GitHub staging and protected production environments;
 - encrypted off-host restic storage, retention/immutability, scheduled backup, and provider-isolated recovery drill against approved RPO/RTO;

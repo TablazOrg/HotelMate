@@ -10,6 +10,9 @@ User=hotelmate
 Group=hotelmate
 WorkingDirectory=/srv/hotelmate
 ExecStart=/usr/local/bin/hotelmate --config /etc/hotelmate/recovery-drill.env backup drill --yes
+Environment=DOCKER_CONFIG=/run/hotelmate-recovery-drill-docker
+RuntimeDirectory=hotelmate-recovery-drill-docker
+RuntimeDirectoryMode=0700
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict

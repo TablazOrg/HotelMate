@@ -1,6 +1,6 @@
 # HotelMate platform operations runbook
 
-This runbook is executable only after the pending choices in [ADR-0007](adr/0007-platform-operations-decisions.md) are approved and the matching staging/production resources exist.
+This runbook implements the accepted choices in [ADR-0007](adr/0007-platform-operations-decisions.md). Its off-host recovery and external paging steps remain unavailable under the two recorded owner-approved exceptions; do not represent either control as active until its protected credentials and exercise evidence exist.
 
 ## Deploy and promote
 

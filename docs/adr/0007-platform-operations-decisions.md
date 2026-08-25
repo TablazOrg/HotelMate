@@ -1,33 +1,36 @@
 # ADR-0007: Platform operations decisions
 
-- Status: Proposed — owner approval required
-- Date: 2026-08-22
+- Status: Accepted
+- Date: 2026-08-25
 - Scope: M7 staging and production operations
+- Approver: repository owner and protected-production reviewer `naderh232`
 
 ## Context
 
-M7 requires external commercial, legal, recovery, access, and ownership choices that cannot be inferred safely from source code. The repository now implements a provider-neutral CLI, immutable release pipeline, restic recovery-set contract, Compose runtime, Ansible host baseline, and observability stack. Those components deliberately fail preflight rather than fabricate missing production policy.
+M7 required external hosting, recovery, access, and ownership decisions before the provider-neutral CLI, release pipeline, recovery contract, Compose runtime, Ansible baseline, and observability stack could be treated as production operations. The owner supplied a production VPS and `hotelmate.ir`, authorized deployment, approved the defaults below, and explicitly directed M7 to close while two controls remain deferred: off-host backup replication and external alert delivery.
 
-## Decisions awaiting approval
+## Accepted decisions
 
-| Decision | Required owner value | Current repository behavior |
-| --- | --- | --- |
-| Provider, region, residency, budget, account owner | Pending | An operator-supplied Ubuntu VPS is validated as staging only; provider/account/residency approval remains absent |
-| Staging/production domains, DNS, certificate owner, IPv6 | Staging resolved: `hotelmate.ir`, WebRamz authoritative DNS, Let's Encrypt for root/`www`, IPv4 only | Trusted HTTPS, HSTS, webroot renewal, timer, reload hook, and external probe are proven in staging; production classification/IPv6 remain owner decisions |
-| Availability, volume, maintenance, scaling trigger | Pending | Proposed SLO only; one API replica remains enforced by architecture |
-| RPO, RTO, retention, legal hold, document recovery | Pending | Daily logical recovery set and 14 daily/8 weekly restic proposal; not approved |
-| Environments, promotions, hotfix, approvers | Pending | GitHub `staging` then protected `production`; environment reviewers must be configured |
-| Registry, secrets manager, object storage, key owner/rotation | Pending | GHCR/keyless cosign/restic interfaces implemented; accounts and rotation owners absent |
-| Metrics/log provider, retention, alert destinations, responders | Pending | Self-hosted 30-day metrics proposal; alert receiver intentionally unconfigured |
-| SSH/admin roles, MFA, break glass, access review | Pending | Key-only non-root SSH baseline; approved keys, MFA/break-glass process, and cadence absent |
+| Decision | Accepted value |
+| --- | --- |
+| Hosting and topology | The owner-supplied Ubuntu 24.04 VPS is the initial low-volume production host. GitHub `staging` and `production` are separate protected promotion gates but share this single runtime because only one host was supplied. Ansible is the rebuild source of truth. Provider account, billing, and exact residency metadata remain owner-held account records. |
+| Domain and TLS | `hotelmate.ir` and `www.hotelmate.ir` use WebRamz authoritative DNS, IPv4, and Let's Encrypt. Certbot uses a mounted webroot and a validated Nginx reload hook. |
+| Availability and capacity | Initial objective: 99.9% monthly external HTTPS availability, 99% of API requests below one second, and fewer than 2% 5xx responses over ten minutes. Upgrade or separate the topology when sustained resource use exceeds 75%, the SLO is missed, or operational load requires isolation. Maintenance is owner-coordinated. |
+| Recovery policy | RPO 24 hours, RTO 2 hours, 14 daily and 8 weekly recovery points. PostgreSQL and in-retention private uploads are one checksummed recovery set. Local daily creation, verification, and privacy timers are active. Host-loss durability is not met until the off-host exception below is remediated. |
+| Promotion and approval | Main-branch CI must pass; release images are built once, scanned, SBOMed, keylessly signed, and verified. The same digest is deployed to protected `staging`, accepted, manually approved by `naderh232`, then promoted to protected `production`. Emergency releases use the same integrity and smoke gates. |
+| Registry and secrets | Private GHCR with GitHub job-scoped pull authorization and keyless Cosign. GitHub environment secrets hold deploy/smoke material; the VPS uses a mode-`600` protected environment. The deployment identity is a dedicated key-only account. |
+| Metrics and logs | Private Prometheus/Grafana/Alertmanager/Loki/Alloy on the production host, 30-day Prometheus retention, external HTTPS probes, dashboard provisioning, and 24 alert rules. Alertmanager remains local-only under the exception below. |
+| Administrative access | Dedicated non-root `hotelmate` user, key-only SSH, root/password/keyboard-interactive login disabled, default-deny firewall, and passwordless automation limited to the approved operator. Provider-console access is the break-glass path; review keys and GitHub environment access quarterly and after personnel changes. |
 
-## Implemented reversible defaults
+## Owner-approved temporary exceptions
 
-- GitHub Actions builds API/web once, scans, produces provenance and SPDX SBOMs, signs and verifies with cosign, deploys staging, then promotes the exact digests through the protected production environment.
-- PostgreSQL and approved private uploads form one checksummed recovery set. Restic encrypts before off-host transfer and enforces retention.
-- Ubuntu/Docker/Compose with Ansible is the current single-host baseline. Ports 80/443 and approved SSH are the only inbound firewall allowances; PostgreSQL binds to host loopback only.
-- Prometheus/Grafana/Alertmanager run privately on the host. External managed telemetry may replace them after approval without changing application metrics.
+1. **Off-host recovery storage:** no S3-compatible endpoint or restricted credentials were supplied. Production continues to create and verify local PostgreSQL/private-upload recovery sets, but a host or provider-account loss can destroy runtime and backups together. Add restricted encrypted object storage, retention/immutability, and a provider-isolated drill after M7.
+2. **External alert delivery:** no Alertmanager webhook or SMTP app password was supplied. Metrics, logs, dashboards, probes, and rules run locally, but alerts do not page an operator. GitHub deployment notifications and manual dashboard review are the interim detection paths. Add and exercise an approved receiver after M7.
+
+Both exceptions are explicit production risk acceptances, not claims that the controls exist. The repository and Ansible preflight require a configured control or this recorded owner deferral.
 
 ## Consequences
 
-M7 implementation can be built, tested, deployed, rolled back, and restored locally. The supplied VPS now also proves external Ansible convergence, reboot persistence, trusted HTTPS staging availability, authenticated acceptance, coordinated on-host recovery-set verification, and simulated certificate renewal with validated edge reload. The local isolated drill measured RPO at 268 seconds and RTO at 4 seconds, but those values are implementation evidence rather than approved production objectives. Signed registry-based staging/production promotion, successful encrypted off-host transfer, a scheduled provider-backed drill against approved RPO/RTO, tested paging, and replacement-host rebuild evidence remain acceptance blockers until this ADR is approved and the required resources are available.
+M7 is accepted for the owner-approved single-VPS production scope. CI and supply-chain gates, protected promotion, immutable digests, production recovery checkpoints, local scheduled recovery and privacy jobs, DNS/TLS renewal, host hardening, metrics/logs/dashboard/rules, smoke/acceptance, and the tested recovery/rollback command paths are operational.
+
+The system is not resilient to loss of the production host/account, and an actionable alert will not reach an external responder until the two exceptions are remediated. Multi-host staging, managed databases, Kubernetes, and multi-region failover remain future capacity/availability decisions rather than M7 requirements.

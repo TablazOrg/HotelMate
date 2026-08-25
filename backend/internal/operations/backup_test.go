@@ -40,6 +40,27 @@ func TestRecoverySetAtSelectsNewestSetBeforeRequestedPoint(t *testing.T) {
 	}
 }
 
+func TestRecoveryReleaseVersionPrefersAuditedCurrentRelease(t *testing.T) {
+	directory := t.TempDir()
+	config := resolvedConfig{Environment: "production", EvidenceDir: directory}
+	config.Application.APIVersion = "0.7.0-stale"
+	if got := recoveryReleaseVersion(config); got != "0.7.0-stale" {
+		t.Fatalf("fallback release version = %q", got)
+	}
+	release := releaseManifest{
+		SchemaVersion: releaseSchemaVersion, ReleaseVersion: "0.7.0-current", Commit: strings.Repeat("a", 40),
+		CreatedAt: time.Date(2026, 8, 25, 0, 0, 0, 0, time.UTC), APIImage: "api", WebImage: "web",
+		Migrations: []string{"migration"}, SBOMs: map[string]string{"api": "api.spdx.json", "web": "web.spdx.json"},
+		Evidence: map[string]any{"ciRun": "test"},
+	}
+	if err := writeJSONAtomic(currentReleasePath(directory, "production"), release, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := recoveryReleaseVersion(config); got != "0.7.0-current" {
+		t.Fatalf("current release version = %q", got)
+	}
+}
+
 func TestRecoveryDrillGuardsProductionAndIsolation(t *testing.T) {
 	app := NewApp(os.Stdout, os.Stderr)
 	if _, err := app.recoveryDrill(context.Background(), resolvedConfig{Environment: "production"}); err == nil || !strings.Contains(err.Error(), "non-production") {

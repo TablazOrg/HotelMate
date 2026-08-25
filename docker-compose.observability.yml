@@ -2,6 +2,8 @@ services:
   prometheus:
     image: prom/prometheus:v3.5.0
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
@@ -22,6 +24,8 @@ services:
   alertmanager:
     image: prom/alertmanager:v0.28.1
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command: [--config.file=/etc/alertmanager/alertmanager.yml, --storage.path=/alertmanager]
     ports:
       - "127.0.0.1:9093:9093"
@@ -32,6 +36,8 @@ services:
   grafana:
     image: grafana/grafana:12.1.0
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     environment:
       GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:?GRAFANA_ADMIN_USER is required}
       GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD is required}
@@ -50,6 +56,8 @@ services:
   loki:
     image: grafana/loki:3.5.3
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command: [-config.file=/etc/loki/loki.yml]
     volumes:
       - ./ops/observability/loki.yml:/etc/loki/loki.yml:ro
@@ -58,6 +66,8 @@ services:
   alloy:
     image: grafana/alloy:v1.10.0
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command: [run, /etc/alloy/config.alloy]
     environment:
       HOTELMATE_ENVIRONMENT: ${APP_ENV:?APP_ENV is required}
@@ -70,6 +80,8 @@ services:
   node-exporter:
     image: prom/node-exporter:v1.9.1
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command:
       - --path.rootfs=/host
       - --collector.textfile.directory=/textfile
@@ -102,6 +114,8 @@ services:
   blackbox-exporter:
     image: prom/blackbox-exporter:v0.27.0
     restart: unless-stopped
+    group_add:
+      - "${HOTELMATE_OPERATOR_GID:?HOTELMATE_OPERATOR_GID is required}"
     command: [--config.file=/etc/blackbox/blackbox.yml]
     volumes:
       - ./ops/observability/blackbox.yml:/etc/blackbox/blackbox.yml:ro

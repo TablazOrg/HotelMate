@@ -236,6 +236,8 @@ jobs:
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH/incoming' && sha256sum -c hotelmate-linux-amd64.sha256 && chmod 700 hotelmate-linux-amd64 && ./hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+          # Keep the protected CLI/default manifest aligned for timers, doctor, and operator commands.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "install -d -m 700 '$DEPLOY_PATH/release' && install -m 600 '$DEPLOY_PATH/incoming/release.json' '$DEPLOY_PATH/release/release.json' && sudo install -o root -g root -m 755 '$DEPLOY_PATH/incoming/hotelmate-linux-amd64' /usr/local/bin/hotelmate"
       - name: Run staging acceptance and authenticated smoke
         env:
           ACCEPTANCE_ONBOARDING_TOKEN: ${{ secrets.ACCEPTANCE_ONBOARDING_TOKEN }}
@@ -299,6 +301,8 @@ jobs:
           # Expansion is intentionally local from protected environment variables.
           # shellcheck disable=SC2029
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "cd '$DEPLOY_PATH/incoming' && sha256sum -c hotelmate-linux-amd64.sha256 && chmod 700 hotelmate-linux-amd64 && ./hotelmate-linux-amd64 --config '$CONFIG_FILE' --release-file '$DEPLOY_PATH/incoming/release.json' deploy apply --yes --json"
+          # Keep the protected CLI/default manifest aligned for timers, doctor, and operator commands.
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "install -d -m 700 '$DEPLOY_PATH/release' && install -m 600 '$DEPLOY_PATH/incoming/release.json' '$DEPLOY_PATH/release/release.json' && sudo install -o root -g root -m 755 '$DEPLOY_PATH/incoming/hotelmate-linux-amd64' /usr/local/bin/hotelmate"
       - name: Verify production public and authenticated paths
         env:
           SMOKE_HOTEL_SLUG: ${{ secrets.SMOKE_HOTEL_SLUG }}

@@ -1,10 +1,10 @@
 # HotelMate staging and production deployment
 
-The M7 release path deploys immutable API/web image digests to a hardened single-host Compose environment. It does not build application images on a server. A public rollout requires the approved values in [ADR-0007](adr/0007-platform-operations-decisions.md); this repository contains no provider account, domain, SSH key, secret, or alert recipient.
+The M7 release path deploys immutable API/web image digests to a hardened single-host Compose environment. It does not build application images on a server. The initial production values and two temporary control exceptions are accepted in [ADR-0007](adr/0007-platform-operations-decisions.md); provider-account metadata, SSH keys, and secrets remain outside the repository.
 
 ## 1. Approve and provision external resources
 
-Approve provider/region/residency/budget, domains/DNS/TLS ownership, RPO/RTO/retention/document recovery, environments/approvers, registry/secrets/restic destination, monitoring/paging owners, and access/break-glass policy.
+For a new environment, approve provider/region/residency/budget, domains/DNS/TLS ownership, RPO/RTO/retention/document recovery, environments/approvers, registry/secrets/restic destination, monitoring/paging owners, and access/break-glass policy. The initial `hotelmate.ir` environment uses the ADR-0007 values and records off-host storage and external alert delivery as temporary exceptions.
 
 Create staging and production Ubuntu 24.04 hosts and DNS records. Obtain the first ACME certificates under `/etc/letsencrypt/live/<domain>` and configure automated renewal. Only approved SSH, HTTP, and HTTPS may be reachable; PostgreSQL binds to host loopback and the Compose network.
 
@@ -22,7 +22,7 @@ ansible-playbook -i inventory.yml playbook.yml --ask-vault-pass \
   -e hotelmate_cosign_sha256=<trusted-cosign-sha256>
 ```
 
-The playbook verifies both controller-side artifacts before transfer, then creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic/Buildx tooling, optional managed swap, Docker JSON-log rotation, Certbot renewal and its fail-closed Nginx reload hook, protected runtime directories/config, and systemd backup/privacy-retention timers. It resolves the operator GID and shares private uploads only between that group and the unprivileged API UID; `HOTELMATE_API_UID` and `HOTELMATE_OPERATOR_GID` are rendered into the protected environment. The optional monthly recovery-drill timer remains disabled until a dedicated Vault-protected non-production environment is supplied. Production intentionally refuses to configure while the alert receiver is unapproved.
+The playbook verifies both controller-side artifacts before transfer, then creates the non-root deploy user, key-only SSH, default-deny firewall, unattended security updates, Docker/PostgreSQL/restic/Buildx tooling, optional managed swap, Docker JSON-log rotation, Certbot renewal and its fail-closed Nginx reload hook, protected runtime directories/config, and systemd backup/privacy-retention timers. It resolves the operator GID and shares private uploads only between that group and the unprivileged API UID; `HOTELMATE_API_UID` and `HOTELMATE_OPERATOR_GID` are rendered into the protected environment. The optional monthly recovery-drill timer remains disabled until a dedicated protected non-production environment is supplied. Production refuses an unapproved alert receiver unless the explicit ADR-0007 deferral flag and reason are supplied.
 
 After the first certificate is issued, configure Certbot to use the Compose webroot rather than retaining the standalone authenticator, then prove renewal and the installed deploy hook:
 

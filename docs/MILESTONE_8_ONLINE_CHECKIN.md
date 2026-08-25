@@ -2,7 +2,7 @@
 
 ## Delivery status
 
-Milestone 8 is engineering-complete and deployed to the guarded local development environment as release `0.8.0-local`. The public production rollout remains gated by the unresolved M7 production-platform decisions and the human pilot/approval evidence listed below.
+Milestone 8 is engineering-complete and its code and migration are present in the current production release. M7 production operations are closed; public enablement of the M8 guest journey remains gated by the human pilot and approval evidence listed below.
 
 ## Guest journey
 
@@ -61,6 +61,6 @@ The implementation and automated acceptance are complete. These non-engineering 
 - a moderated mobile study in which at least five of six representative participants finish without assistance;
 - product-owner approval of pilot completion, abandonment, failure, rework, completion-time, and front-desk handling targets;
 - manual keyboard and screen-reader review across the invitation, wizard, review, correction, and recovery paths;
-- promotion through the approved M7 signed-image staging/production path after DNS/TLS, off-host durability, alert routing, and production architecture gates are closed.
+- feature-controlled enablement through the approved M7 signed-image production path, with the two accepted M7 operational exceptions kept visible to the rollout owner.
 
-No document marks those gates passed without the corresponding participants, owners, or production platform evidence.
+No document marks those gates passed without the corresponding participants and owner approval.
