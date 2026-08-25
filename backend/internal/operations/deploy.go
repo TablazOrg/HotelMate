@@ -373,7 +373,24 @@ func composeArguments(config resolvedConfig, command ...string) []string {
 		args = append(args, "--env-file", managed)
 	}
 	args = append(args, "-f", config.ComposeFile)
+	if observability := managedObservabilityCompose(config); observability != "" {
+		args = append(args, "-f", observability)
+	}
 	return append(args, command...)
+}
+
+func managedObservabilityCompose(config resolvedConfig) string {
+	if config.Environment == "development" {
+		return ""
+	}
+	path := filepath.Join(filepath.Dir(config.ComposeFile), "docker-compose.observability.yml")
+	if filepath.Clean(path) == filepath.Clean(config.ComposeFile) {
+		return ""
+	}
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
 }
 
 func releaseEnvironment(release releaseManifest) []string {

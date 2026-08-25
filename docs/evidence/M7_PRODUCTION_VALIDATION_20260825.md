@@ -51,6 +51,8 @@ The daily backup timer and both privacy-retention timers are enabled/active, and
 
 Prometheus, Grafana 12.1.0, Alertmanager, Loki, Alloy, node-exporter, cAdvisor, PostgreSQL exporter, and blackbox exporter are running privately. Prometheus reported all six targets up (`hotelmate-api`, external HTTPS, PostgreSQL, node, containers, and Loki), loaded 24 rules in two groups, and had zero firing rules at capture. Loki returned ready and Alloy was shipping production container logs. Prometheus, Grafana, and Alertmanager listen on loopback only.
 
+The final consecutive-promotion check exposed that application-only Compose orphan cleanup could stop the separately started monitoring project. Deployment composition now automatically includes the sibling observability definition in managed staging/production environments, so activation and rollback preserve—and on a new host start—the monitoring services. A regression test keeps development application-only while requiring the combined managed project.
+
 Alertmanager intentionally uses `unconfigured-local-receiver`; no webhook or SMTP credential exists. This is the external-alert-delivery exception in ADR-0007, not successful paging evidence.
 
 ## Accepted residual risk

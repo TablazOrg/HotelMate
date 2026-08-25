@@ -90,8 +90,11 @@ Start production plus the private operations profile after replacing the externa
 
 ```bash
 docker compose --env-file /etc/hotelmate/production.env \
+  --env-file /srv/hotelmate-private/evidence/production/current-release.env \
   -f docker-compose.production.yml -f docker-compose.observability.yml up -d
 ```
+
+For managed staging and production, the operations CLI automatically adds the sibling observability Compose definition to its project. Deployment orphan cleanup therefore preserves the monitoring services, and the final activation starts them on a new host. Development remains application-only unless the operator adds the observability definition explicitly.
 
 Prometheus, Grafana, and Alertmanager bind to loopback for SSH tunnel/VPN access. Validate every rule in staging. The API remains one replica because realtime fanout is process-local.
 

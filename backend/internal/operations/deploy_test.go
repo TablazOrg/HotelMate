@@ -73,6 +73,35 @@ func TestProductionBackupPolicyRequiresConfigurationOrExplicitDeferral(t *testin
 	}
 }
 
+func TestComposeArgumentsKeepManagedObservabilityInTheDeploymentProject(t *testing.T) {
+	directory := t.TempDir()
+	production := filepath.Join(directory, "docker-compose.production.yml")
+	observability := filepath.Join(directory, "docker-compose.observability.yml")
+	for _, path := range []string{production, observability} {
+		if err := os.WriteFile(path, []byte("services: {}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	managed := strings.Join(composeArguments(resolvedConfig{
+		Environment: "production",
+		ComposeFile: production,
+		EvidenceDir: filepath.Join(directory, "evidence"),
+	}, "up", "-d", "--remove-orphans"), " ")
+	if !strings.Contains(managed, "-f "+production+" -f "+observability) {
+		t.Fatalf("managed compose arguments do not include observability: %s", managed)
+	}
+
+	development := strings.Join(composeArguments(resolvedConfig{
+		Environment: "development",
+		ComposeFile: production,
+		EvidenceDir: filepath.Join(directory, "evidence"),
+	}, "up", "-d"), " ")
+	if strings.Contains(development, observability) {
+		t.Fatalf("development unexpectedly includes managed observability: %s", development)
+	}
+}
+
 func TestEnvironmentLockRejectsLiveOwnerAndReleasesByToken(t *testing.T) {
 	directory := t.TempDir()
 	release, err := acquireEnvironmentLock(directory, "staging")
