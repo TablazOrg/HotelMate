@@ -20,6 +20,9 @@ scrape_configs:
       - targets: ["postgres-exporter:9187"]
 
   - job_name: node
+    # Preserve the operations CLI's textfile `job` label (backup, deploy,
+    # purge, and drill) instead of renaming it to `exported_job`.
+    honor_labels: true
     static_configs:
       - targets: ["node-exporter:9100"]
 

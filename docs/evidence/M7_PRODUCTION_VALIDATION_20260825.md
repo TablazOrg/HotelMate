@@ -53,6 +53,8 @@ Prometheus, Grafana 12.1.0, Alertmanager, Loki, Alloy, node-exporter, cAdvisor, 
 
 The final consecutive-promotion check exposed that application-only Compose orphan cleanup could stop the separately started monitoring project. Deployment composition now automatically includes the sibling observability definition in managed staging/production environments, so activation and rollback preserve—and on a new host start—the monitoring services. A regression test keeps development application-only while requiring the combined managed project.
 
+The same closure check found Prometheus renaming the operations CLI textfile collector's `job` label to `exported_job`, which made the backup-freshness rule report an absent series despite a successful current backup. The node-exporter scrape now honors the collector labels, restoring the backup, purge, deploy, migration, and drill alert/dashboard queries to their intended series.
+
 Alertmanager intentionally uses `unconfigured-local-receiver`; no webhook or SMTP credential exists. This is the external-alert-delivery exception in ADR-0007, not successful paging evidence.
 
 ## Accepted residual risk
