@@ -2,14 +2,14 @@ import type { CSSProperties } from 'react'
 import type { Service, ServiceRequest, ServiceRequestStatus } from './api'
 
 const brandStops: Record<string, { dark: string; soft: string }> = {
-  '#f53d46': { dark: '#c20000', soft: 'rgba(245,61,70,.08)' },
+  '#6c4fe0': { dark: '#4a32b0', soft: 'rgba(108,79,224,.08)' },
   '#17245f': { dark: '#0d1640', soft: 'rgba(23,36,95,.08)' },
   '#575eff': { dark: '#242bcc', soft: 'rgba(87,94,255,.08)' },
   '#13b476': { dark: '#09734a', soft: 'rgba(19,180,118,.09)' },
 }
 
 export function handoffTheme(color?: string): CSSProperties {
-  const primary = (color || '#f53d46').toLowerCase()
+  const primary = (color || '#6c4fe0').toLowerCase()
   const stop = brandStops[primary]
   return {
     '--brand': primary,

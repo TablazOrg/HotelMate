@@ -89,9 +89,9 @@
   /* --- brand ------------------------------------------------------------
      handoff.ts overrides --brand / --brand-dark / --brand-soft per hotel.
      Everything below derives from them so any tenant colour stays coherent. */
-  --brand: #f53d46;
-  --brand-dark: #c20000;
-  --brand-soft: rgba(245, 61, 70, .08);
+  --brand: #6c4fe0;
+  --brand-dark: #4a32b0;
+  --brand-soft: rgba(108, 79, 224, .08);
   --brand-fg: #ffffff;
 
   /* --- status ---------------------------------------------------------- */
