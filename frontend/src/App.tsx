@@ -195,7 +195,7 @@ function StaffDashboard({ session, initialStaff, initialHotel, onLogout }: { ses
 function BrandingPanel({ hotel, token, onUpdated }: { hotel: Hotel; token: string; onUpdated: (hotel: Hotel) => void }) {
   const [form, setForm] = useState({ name: hotel.name, logoUrl: hotel.logoUrl, primaryColor: hotel.primaryColor, timezone: hotel.timezone })
   const [notice, setNotice] = useState(''); const [error, setError] = useState(''); const [saving, setSaving] = useState(false)
-  const palette = [['#f53d46', 'قرمز تریپ'], ['#17245f', 'سرمه‌ای'], ['#575eff', 'نیلی'], ['#13b476', 'سبز']] as const
+  const palette = [['#6c4fe0', 'بنفش'], ['#17245f', 'سرمه‌ای'], ['#575eff', 'نیلی'], ['#13b476', 'سبز']] as const
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setSaving(true); setNotice(''); setError('')
     try { const response = await api<{ hotel: Hotel }>('/api/v1/staff/hotel', { method: 'PATCH', body: JSON.stringify(form) }, token); onUpdated(response.hotel); setNotice('رنگ و نام هتل ذخیره شد.') }
