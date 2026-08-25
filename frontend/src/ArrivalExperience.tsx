@@ -390,7 +390,17 @@ function ArrivalSettingsPanel({ token, settings, canManage, onSaved }: { token: 
   useEffect(() => setForm(settings), [settings])
   async function save() {
     setBusy(true); setNotice(''); setError('')
-    try { const response = await api<{ settings: ArrivalSettings }>('/api/v1/staff/arrival-settings', { method: 'PATCH', body: JSON.stringify(form) }, token); onSaved(response.settings); setNotice('کنترل‌های ورود با ثبت ممیزی ذخیره شد.') }
+    const payload = {
+      onlineCheckInEnabled: form.onlineCheckInEnabled,
+      digitalRegistrationEnabled: form.digitalRegistrationEnabled,
+      paymentStepEnabled: form.paymentStepEnabled,
+      invitationTtlHours: form.invitationTtlHours,
+      termsVersion: form.termsVersion,
+      termsLocale: form.termsLocale,
+      termsText: form.termsText,
+      steps: form.steps,
+    }
+    try { const response = await api<{ settings: ArrivalSettings }>('/api/v1/staff/arrival-settings', { method: 'PATCH', body: JSON.stringify(payload) }, token); onSaved(response.settings); setNotice('کنترل‌های ورود با ثبت ممیزی ذخیره شد.') }
     catch (requestError) { setError(messageFrom(requestError)) }
     finally { setBusy(false) }
   }
